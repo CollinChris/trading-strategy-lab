@@ -14,6 +14,7 @@ Execution model (chosen to avoid lookahead bias):
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import pandas as pd
@@ -154,16 +155,30 @@ def run_symbol_day(
     return trades
 
 
-def run_backtest(cfg: Config) -> pd.DataFrame:
-    """Run every strategy over every symbol/day; returns one row per trade."""
-    bars_by_symbol = load_bars(cfg.symbols, cfg.interval, cfg.period)
+def run_on(
+    bars_by_symbol: dict[str, pd.DataFrame],
+    make_strategies: Callable[[], list[Strategy]],
+    cfg: Config,
+    dates: set[dt.date] | None = None,
+) -> pd.DataFrame:
+    """Run strategies over preloaded bars, optionally restricted to a set of
+    session dates (prior closes still come from the full series, so a filtered
+    day keeps its true previous-session close)."""
     trades: list[Trade] = []
     for symbol, bars in bars_by_symbol.items():
         days = split_days(bars)
-        for strategy in all_strategies():
+        for strategy in make_strategies():
             for date, day, prior_close in days:
+                if dates is not None and date not in dates:
+                    continue
                 trades.extend(run_symbol_day(strategy, symbol, date, day, prior_close, cfg))
     frame = pd.DataFrame([t.__dict__ for t in trades])
     if not frame.empty:
         frame = frame.sort_values("exit_time").reset_index(drop=True)
     return frame
+
+
+def run_backtest(cfg: Config) -> pd.DataFrame:
+    """Run every strategy over every symbol/day; returns one row per trade."""
+    bars_by_symbol = load_bars(cfg.symbols, cfg.interval, cfg.period)
+    return run_on(bars_by_symbol, all_strategies, cfg)

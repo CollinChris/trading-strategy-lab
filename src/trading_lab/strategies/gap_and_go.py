@@ -19,9 +19,12 @@ class GapAndGo(Strategy):
     name = "gap_and_go"
     max_trades_per_day = 1
 
-    def __init__(self, min_gap_pct: float = 2.0, entry_window_bars: int = 12):
+    def __init__(
+        self, min_gap_pct: float = 2.0, entry_window_bars: int = 12, target_r: float = 2.0
+    ):
         self.min_gap_pct = min_gap_pct
         self.entry_window_bars = entry_window_bars  # 12 x 5m = first hour
+        self.target_r = target_r
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         super().new_day(day, prior_close)
@@ -43,6 +46,6 @@ class GapAndGo(Strategy):
             return EntrySignal(
                 reason=f"gap {self.gap_pct:.1f}%, break of opening high {self.opening_high:.2f}",
                 stop_price=self.opening_low,
-                target_r=2.0,
+                target_r=self.target_r,
             )
         return None

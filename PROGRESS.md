@@ -3,6 +3,35 @@
 A running record of what was built, what the data said, and what changed my
 mind — kept honest for portfolio purposes.
 
+## 2026-08-23 — v0.2: parameter tuning, and the overfitting lesson
+
+**Goal.** v0.1's numbers were all negative, so before anything touches paper
+trading I set a hard gate: *a configuration must show positive expectancy on
+data it wasn't optimized on.* Built `trading-lab tune`: every strategy's stops,
+targets, and entry thresholds parameterized (~75 combinations), grid-searched
+by expectancy per trade on the first 36 sessions, winners re-run on the 24
+held-out sessions alongside the untuned defaults.
+
+**Result: the gate is unmet — and the failure mode is the education.**
+
+- ORB's best training parameters earned **+$28.35/trade** in-sample and lost
+  **−$18.78/trade** out-of-sample. That 47-dollar swing is what memorizing 36
+  sessions looks like.
+- In 3 of 4 tunable strategies the tuned parameters did *worse* on the test
+  window than the defaults they were supposed to improve.
+- All four test expectancies clustered between −$10 and −$19 no matter the
+  parameters — the held-out month (Jul 21–Aug 21) was hostile to long-only
+  intraday on this universe, full stop. You can't stop-loss your way out of
+  the wrong regime.
+- Gap & Go stayed untunable: even at a 1% gap threshold, mega caps produced
+  too few qualifying days to evaluate honestly.
+
+**What changes next.** One train/test split is itself a small sample, so the
+next methodological step is walk-forward validation (rolling folds). After
+that, the more promising lever is *when to trade* rather than *how to exit*:
+regime filters (trend/volatility gates) attack the clustered losses directly,
+where stop tweaking demonstrably didn't. Details: [results/TUNING.md](results/TUNING.md).
+
 ## 2026-08-23 — v0.1: five strategies, engine, first baseline
 
 **Built.** Researched the most commonly taught day-trading setups (Warrior

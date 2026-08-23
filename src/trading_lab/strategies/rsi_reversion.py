@@ -18,9 +18,10 @@ class RsiReversion(Strategy):
     name = "rsi2_reversion"
     max_trades_per_day = 3
 
-    def __init__(self, entry_level: float = 10.0, exit_level: float = 60.0):
+    def __init__(self, entry_level: float = 10.0, exit_level: float = 60.0, stop_pct: float = 0.01):
         self.entry_level = entry_level
         self.exit_level = exit_level
+        self.stop_pct = stop_pct
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         super().new_day(day, prior_close)
@@ -35,7 +36,7 @@ class RsiReversion(Strategy):
         if dip and uptrend:
             return EntrySignal(
                 reason=f"RSI(2)={float(self.rsi2.iloc[i]):.0f} dip above VWAP",
-                stop_pct=0.01,
+                stop_pct=self.stop_pct,
                 target_r=None,
             )
         return None

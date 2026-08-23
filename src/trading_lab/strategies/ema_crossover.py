@@ -17,9 +17,10 @@ class EmaCrossover(Strategy):
     name = "ema_crossover"
     max_trades_per_day = 2
 
-    def __init__(self, fast: int = 9, slow: int = 20):
+    def __init__(self, fast: int = 9, slow: int = 20, stop_bars: int = 5):
         self.fast_span = fast
         self.slow_span = slow
+        self.stop_bars = stop_bars  # protective stop at the low of the last N bars
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         super().new_day(day, prior_close)
@@ -35,7 +36,7 @@ class EmaCrossover(Strategy):
         ) <= float(self.slow.iloc[i - 1])
         above_vwap = float(self.day["close"].iloc[i]) > float(self.vwap.iloc[i])
         if crossed_up and above_vwap:
-            stop = float(self.day["low"].iloc[max(0, i - 4) : i + 1].min())
+            stop = float(self.day["low"].iloc[max(0, i - self.stop_bars + 1) : i + 1].min())
             return EntrySignal(
                 reason=f"EMA{self.fast_span}/{self.slow_span} cross up above VWAP",
                 stop_price=stop,
