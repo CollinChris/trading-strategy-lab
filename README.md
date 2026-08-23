@@ -6,28 +6,35 @@ risk sizing — then paper-traded via the Alpaca API. The point is to measure,
 not to believe: which of the setups people actually teach survives contact
 with out-of-sample data?
 
-## Current verdict (60 days, 5-minute bars, v0.1 untuned rules)
+## Current verdict (60 days, 5-minute bars, untuned rules)
 
 | Strategy | Trades | Win rate | Profit factor | Expectancy/trade | Total P&L |
 |---|---|---|---|---|---|
 | RSI(2) Reversion | 396 | **52.0%** | 0.53 | −$10.87 | −$4,304 |
 | Gap & Go | 4 | 50.0% | 0.87 | −$22.14 | −$89 |
-| Opening Range Breakout | 179 | 46.9% | **0.96** | −$3.47 | −$621 |
+| Opening Range Breakout | 179 | 46.9% | 0.96 | −$3.47 | −$621 |
+| News Momentum | 30 | 46.7% | **1.04** | **+$1.62** | +$49 |
+| High-Break ATR Trail | 154 | 37.0% | 0.89 | −$6.35 | −$978 |
 | VWAP Pullback | 246 | 34.6% | 0.75 | −$14.33 | −$3,524 |
 | EMA 9/20 Crossover | 240 | 27.5% | 0.62 | −$15.14 | −$3,633 |
+| Squeeze Breakout | 142 | 25.4% | 0.34 | −$35.52 | −$5,043 |
 
 ![Cumulative P&L by strategy](results/equity_curves.png)
 
-**The honest headline: every strategy lost money in this window.** That is the
+**The honest headline: no strategy has a validated edge yet.** That is the
 expected result for untuned textbook rules on liquid large caps after slippage —
-and it's the whole reason to test before trading. Two early lessons the data
+and it's the whole reason to test before trading. Three lessons the data
 already teaches:
 
 1. **Win rate is not profitability.** The "best" strategy by win rate (RSI(2),
-   52%) has the *worst* expectancy — its average loss is twice its average win.
-   Ranking by profit factor instead puts Opening Range Breakout on top (0.96,
-   nearly breakeven).
-2. **Sample size gates every conclusion.** Gap & Go looks harmless at −$89, but
+   52%) has one of the *worst* expectancies — its average loss is twice its
+   average win.
+2. **A full-window profit can be an illusion.** News Momentum is the only
+   strategy with a profit factor above 1.0 — but the train/test split shows its
+   entire profit lives in the earlier weeks; on the held-out final month it
+   loses −$20.45/trade like everything else. Full-window totals hide regime
+   dependence.
+3. **Sample size gates every conclusion.** Gap & Go looks harmless at −$89, but
    four trades is noise, not evidence — its 2% gap filter almost never fires on
    mega caps, which is itself a finding: the strategy's edge (if any) lives in
    the low-float small caps it was designed for.
@@ -35,23 +42,25 @@ already teaches:
 Full metrics, exit-reason breakdown, and the trade-by-trade log:
 [results/RESULTS.md](results/RESULTS.md).
 
-## Tuning (v0.2): can stops and targets fix it?
+## Tuning: can stops and targets fix it?
 
 Short answer so far: **no — and the way it fails is the lesson.** A grid search
 over each strategy's stop placement, profit targets, and entry thresholds
-(~75 parameter sets), optimized by expectancy on the first 36 sessions and
-validated on 24 held-out sessions:
+(~93 parameter sets across all eight strategies), optimized by expectancy on
+the first 36 sessions and validated on 24 held-out sessions:
 
 ![Train vs test expectancy](results/tuning_shrinkage.png)
 
-- The star of the training window (ORB at **+$28/trade**) lost **−$19/trade**
-  on data it hadn't seen — the grid search memorized the past, it didn't find
-  an edge.
-- In 3 of 4 tunable strategies, the "optimal" parameters did *worse* out-of-
+- The worst offender is now News Momentum: tuned parameters earned
+  **+$42/trade** in-sample and lost **−$24/trade** out-of-sample — a 66-dollar
+  swing from memorizing 36 sessions. ORB does the same dance (+$28 → −$19).
+- In most tunable strategies, the "optimal" parameters did *worse* out-of-
   sample than the untuned defaults.
-- Every test-window expectancy landed between −$10 and −$19 regardless of
+- Every test-window expectancy landed between −$7 and −$35 regardless of
   parameters: the held-out month was simply hostile to long-only intraday on
   this universe, which is a regime problem no stop-loss setting can tune away.
+  That makes regime filters (learned from the trade journal's condition
+  columns) the next lever — not more parameter search.
 - Gap & Go couldn't be tuned at all — even at a 1% gap threshold it produced
   too few trades on mega caps to evaluate honestly.
 

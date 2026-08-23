@@ -33,9 +33,20 @@ overnight.
   price window, quietly starving the news strategy of a month of signals —
   found by cross-checking date ranges, fixed by widening the fetch window.
 
-**Next.** Let the paper loop and journal run for a couple of weeks; check the
-tuner's out-of-sample verdict on News Momentum; then mine the journal's
-condition columns for regime filters.
+**The out-of-sample verdict (same day, worth its own paragraph).** The tuner's
+train/test split killed the celebration: News Momentum's full-window profit
+lives entirely in the first 36 sessions. On the held-out final month it loses
+−$20.45/trade with default parameters, and its *tuned* parameters produced the
+lab's worst overfit yet (+$42.15 train → −$23.89 test). High-Break ATR Trail
+told the same story in miniature (+$17.22 → −$9.90). Eight strategies, ~93
+parameter sets, one conclusion twice confirmed: on this universe and window,
+parameter search finds memories, not edges — and every strategy bleeds in the
+same held-out month, which is regime information, not strategy information.
+
+**Next.** Let the paper loop and journal run for a couple of weeks to
+accumulate genuinely unseen trades; then mine the journal's condition columns
+for regime filters — the data now says *when* you trade matters more than
+*what* you tweak.
 
 ## 2026-08-23 — v0.2: parameter tuning, and the overfitting lesson
 
