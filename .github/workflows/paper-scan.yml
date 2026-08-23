@@ -1,0 +1,27 @@
+name: Paper scan
+
+# Every 10 minutes during US regular hours (EDT: 13:30–19:30 UTC covers
+# 09:30–15:30 ET, the entry window). GitHub cron is UTC and ignores DST —
+# after the November switch to EST, shift these hours by +1 (14-20).
+on:
+  schedule:
+    - cron: "*/10 13-19 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: paper-trading
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Scan and place paper orders
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: uv run trading-lab paper

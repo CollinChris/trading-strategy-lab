@@ -23,14 +23,17 @@ import pandas as pd
 
 from .backtest import run_on
 from .config import Config
-from .data import load_bars, market_today, split_days
+from .data import load_bars, load_news, market_today, split_days
 from .metrics import summarize
 from .report import BASELINE, GRID, INK, INK_2, MUTED, STRATEGIES, SURFACE, _md_table
 from .strategies import (
     EmaCrossover,
     GapAndGo,
+    HighBreakTrail,
+    NewsMomentum,
     OpeningRangeBreakout,
     RsiReversion,
+    SqueezeBreakout,
     Strategy,
     VwapPullback,
 )
@@ -66,6 +69,18 @@ GRIDS: dict[str, tuple[type[Strategy], list[dict[str, Any]]]] = {
             stop_pct=[0.005, 0.01, 0.02],
         ),
     ),
+    "news_momentum": (
+        NewsMomentum,
+        _grid(window_min=[30, 60], vol_mult=[1.2, 1.5, 2.0], target_r=[1.5, 2.0, 3.0]),
+    ),
+    "squeeze_breakout": (
+        SqueezeBreakout,
+        _grid(bw_lookback=[6, 12], target_r=[1.5, 2.0, 3.0]),
+    ),
+    "high_break_trail": (
+        HighBreakTrail,
+        _grid(window_bars=[6, 12], trail_atr_mult=[1.5, 2.0, 3.0]),
+    ),
 }
 
 
@@ -94,6 +109,7 @@ def _stats(trades: pd.DataFrame) -> dict[str, Any]:
 
 def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) -> Path:
     bars = load_bars(cfg.symbols, cfg.interval, cfg.period)
+    news = load_news(cfg.symbols, cfg.interval, cfg.period)
     all_dates: list[dt.date] = sorted(
         {date for sym_bars in bars.values() for date, _, _ in split_days(sym_bars)}
     )
@@ -108,11 +124,13 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
     rows = []
     for name, (cls, grid) in GRIDS.items():
         label = STRATEGIES[name][0]
+        # news_momentum needs the headline index injected alongside its params
+        extra = {"news_index": news} if name == "news_momentum" else {}
         best_params: dict[str, Any] | None = None
         best_score = float("-inf")
         skipped = 0
         for params in grid:
-            trades = run_on(bars, _factory(cls, params), cfg, train)
+            trades = run_on(bars, _factory(cls, {**params, **extra}), cfg, train)
             if len(trades) < MIN_TRAIN_TRADES:
                 skipped += 1
                 continue
@@ -129,14 +147,14 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
                     "params": "n/a (too few trades)",
                     "train": None,
                     "test": None,
-                    "default_test": _stats(run_on(bars, _factory(cls), cfg, test)),
+                    "default_test": _stats(run_on(bars, _factory(cls, extra), cfg, test)),
                 }
             )
             continue
 
-        train_stats = _stats(run_on(bars, _factory(cls, best_params), cfg, train))
-        test_stats = _stats(run_on(bars, _factory(cls, best_params), cfg, test))
-        default_test = _stats(run_on(bars, _factory(cls), cfg, test))
+        train_stats = _stats(run_on(bars, _factory(cls, {**best_params, **extra}), cfg, train))
+        test_stats = _stats(run_on(bars, _factory(cls, {**best_params, **extra}), cfg, test))
+        default_test = _stats(run_on(bars, _factory(cls, extra), cfg, test))
         rows.append(
             {
                 "strategy": label,

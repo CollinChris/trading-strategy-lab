@@ -1,0 +1,27 @@
+name: Paper flatten (EOD)
+
+# Close everything just before the bell: 19:55 UTC = 15:55 ET during EDT.
+# The 20:55 run is the EST-season safety net (a no-op in summer: 0 positions).
+on:
+  schedule:
+    - cron: "55 19 * * 1-5"
+    - cron: "55 20 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: paper-trading
+  cancel-in-progress: false
+
+jobs:
+  flatten:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Close all paper positions
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: uv run trading-lab paper --flatten

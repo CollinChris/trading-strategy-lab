@@ -15,17 +15,20 @@ Requires ALPACA_API_KEY / ALPACA_SECRET_KEY in .env — paper keys only.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import os
 from pathlib import Path
 
+import pandas as pd
 from dotenv import load_dotenv
 
 from .config import Config
-from .data import load_bars, market_today, split_days
+from .data import MARKET_TZ, load_bars, load_news, market_today, split_days
 from .strategies import all_strategies
 
 STATE_PATH = Path("data/paper_state.json")
+JOURNAL_PATH = Path("results/paper_journal.csv")
 
 
 def _client():
@@ -55,11 +58,20 @@ def _save_state(state: dict[str, list[str]]) -> None:
 
 def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     """One pass: signal on the latest completed bar -> bracket market order."""
+    now_et = dt.datetime.now(tz=MARKET_TZ)
+    entry_cutoff = dt.time.fromisoformat(cfg.entry_cutoff)
+    if not dt.time(9, 35) <= now_et.time() < entry_cutoff:
+        print(
+            f"{now_et:%H:%M} ET is outside the entry window (09:35–{cfg.entry_cutoff}) — no scan."
+        )
+        return
+
     today = market_today().isoformat()  # market date, not the local (SGT) date
     state = _load_state()
     done_today: list[str] = state.get(today, [])
 
     bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d")
+    news = load_news(cfg.symbols, cfg.interval, period="3d")
     client = None if dry_run else _client()
     placed = 0
 
@@ -73,10 +85,11 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
             continue
         last_price = float(day["close"].iloc[-1])
 
-        for strategy in all_strategies():
+        for strategy in all_strategies(news):
             tag = f"{strategy.name}--{symbol}--{today}"
             if tag in done_today:
                 continue
+            strategy.symbol = symbol
             strategy.new_day(day, prior_close)
             sig = strategy.entry_signal(len(day) - 1)
             if sig is None:
@@ -103,7 +116,17 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
             if dry_run:
                 print(f"[dry-run] {line}")
             else:
-                _submit(client, symbol, qty, stop, target, tag)
+                try:
+                    _submit(client, symbol, qty, stop, target, tag)
+                except Exception as exc:  # noqa: BLE001 — one bad order must not stop the scan
+                    # Deterministic client_order_id doubles as the dedup key on
+                    # stateless runners: Alpaca rejects a reused id.
+                    if "client_order_id" in str(exc) or "unique" in str(exc).lower():
+                        print(f"[already today] {strategy.name} {symbol}")
+                        done_today.append(tag)
+                    else:
+                        print(f"[error] {line}\n        {exc}")
+                    continue
                 print(f"[submitted] {line}")
                 done_today.append(tag)
                 placed += 1
@@ -149,3 +172,103 @@ def status() -> None:
             f"{p.symbol}: {p.qty} @ {float(p.avg_entry_price):.2f} "
             f"→ {float(p.current_price):.2f} ({float(p.unrealized_plpc) * 100:+.2f}%)"
         )
+
+
+def journal(cfg: Config) -> None:
+    """Append today's filled paper trades to results/paper_journal.csv.
+
+    Each row = one strategy entry (identified by our client_order_id tag)
+    with entry/exit fills from Alpaca plus the same market-condition snapshot
+    the backtester records — so paper results accumulate into a tuning dataset.
+    Exits closed by --flatten instead of a bracket leg are matched best-effort
+    to the day's last sell fill for that symbol.
+    """
+    from alpaca.trading.enums import QueryOrderStatus
+    from alpaca.trading.requests import GetOrdersRequest
+
+    from .backtest import entry_conditions, load_spy_by_date
+    from .indicators import session_vwap
+
+    client = _client()
+    today = market_today()
+    day_start = dt.datetime.combine(today, dt.time(0, 0), tzinfo=MARKET_TZ)
+    orders = client.get_orders(
+        GetOrdersRequest(status=QueryOrderStatus.CLOSED, after=day_start, limit=500, nested=True)
+    )
+
+    bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d")
+    spy_by_date = load_spy_by_date(Config(symbols=cfg.symbols, period="5d"))
+
+    already = set()
+    if JOURNAL_PATH.exists():
+        already = set(pd.read_csv(JOURNAL_PATH)["client_order_id"].astype(str))
+
+    flatten_sells: dict[str, list] = {}
+    for o in orders:
+        ours = o.client_order_id and "--" in str(o.client_order_id)
+        if not ours and str(o.side) == "OrderSide.SELL" and o.filled_at is not None:
+            flatten_sells.setdefault(o.symbol, []).append(o)
+
+    rows = []
+    for o in orders:
+        tag = str(o.client_order_id or "")
+        if "--" not in tag or tag in already or o.filled_at is None:
+            continue  # not one of ours / already journaled / never filled
+        strategy_name = tag.split("--")[0]
+        entry_price = float(o.filled_avg_price)
+        entry_time = pd.Timestamp(o.filled_at).tz_convert(MARKET_TZ)
+        qty = int(float(o.filled_qty))
+
+        exit_price, exit_time, exit_reason = None, None, "open"
+        for leg in o.legs or []:
+            if leg.filled_at is not None:
+                exit_price = float(leg.filled_avg_price)
+                exit_time = pd.Timestamp(leg.filled_at).tz_convert(MARKET_TZ)
+                exit_reason = "stop" if "stop" in str(leg.type).lower() else "target"
+        if exit_price is None and flatten_sells.get(o.symbol):
+            sell = flatten_sells[o.symbol][-1]
+            exit_price = float(sell.filled_avg_price)
+            exit_time = pd.Timestamp(sell.filled_at).tz_convert(MARKET_TZ)
+            exit_reason = "eod"
+
+        conditions = {}
+        bars = bars_by_symbol.get(o.symbol)
+        if bars is not None:
+            days = {date: (day, prior) for date, day, prior in split_days(bars)}
+            if today in days:
+                day, prior_close = days[today]
+                i = max(0, day.index.searchsorted(entry_time) - 1)
+                conditions = entry_conditions(
+                    day,
+                    int(i),
+                    entry_price,
+                    prior_close,
+                    session_vwap(day),
+                    spy_by_date.get(today),
+                )
+
+        rows.append(
+            {
+                "client_order_id": tag,
+                "date": today.isoformat(),
+                "strategy": strategy_name,
+                "symbol": o.symbol,
+                "qty": qty,
+                "entry_time": entry_time,
+                "entry_price": entry_price,
+                "exit_time": exit_time,
+                "exit_price": exit_price,
+                "exit_reason": exit_reason,
+                "pnl": round((exit_price - entry_price) * qty, 2) if exit_price else None,
+                **conditions,
+            }
+        )
+
+    if not rows:
+        print("No new filled paper trades to journal.")
+        return
+    frame = pd.DataFrame(rows)
+    JOURNAL_PATH.parent.mkdir(exist_ok=True)
+    header = not JOURNAL_PATH.exists()
+    frame.to_csv(JOURNAL_PATH, mode="a", header=header, index=False)
+    print(f"Journaled {len(frame)} trade(s) → {JOURNAL_PATH}")

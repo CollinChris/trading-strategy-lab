@@ -25,6 +25,10 @@ def main() -> None:
     pp.add_argument("--flatten", action="store_true", help="close all paper positions/orders")
     pp.add_argument("--status", action="store_true", help="show paper positions and open orders")
 
+    sub.add_parser(
+        "journal", help="append today's filled paper trades to results/paper_journal.csv"
+    )
+
     args = parser.parse_args()
 
     if args.command == "backtest":
@@ -57,6 +61,11 @@ def main() -> None:
             paper.status()
         else:
             paper.scan_and_trade(Config(), dry_run=args.dry_run)
+
+    elif args.command == "journal":
+        from . import paper
+
+        paper.journal(Config())
 
 
 if __name__ == "__main__":

@@ -26,11 +26,13 @@ class EntrySignal:
     stop_price: float | None = None  # absolute stop, or...
     stop_pct: float | None = None  # ...fractional stop below entry (e.g. 0.01)
     target_r: float | None = None  # take-profit at N x risk; None = no fixed target
+    trail_dist: float | None = None  # trailing stop: ratchet stop to (high - trail_dist)
 
 
 class Strategy(ABC):
     name: str = "base"
     max_trades_per_day: int = 1
+    symbol: str = ""  # set by the engine before new_day() — for context-aware strategies
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         """Reset state and precompute causal indicators for one session."""

@@ -42,6 +42,43 @@ def test_gap_and_go_requires_gap():
     assert sig.stop_price == 100.0  # opening bar low
 
 
+def test_news_momentum_needs_fresh_headline():
+    import pandas as pd
+
+    from trading_lab.strategies import NewsMomentum
+
+    day = breakout_day()
+    date = day.index[0].date()
+    strat = NewsMomentum(news_index={})
+    strat.symbol = "TST"
+    strat.new_day(day, None)
+    assert strat.entry_signal(4) is None  # breakout bar, but no headline -> no trade
+
+    headline = day.index[3] - pd.Timedelta(minutes=2)
+    strat = NewsMomentum(news_index={("TST", date): [headline]}, vol_mult=0.5)
+    strat.symbol = "TST"
+    strat.new_day(day, None)
+    sig = strat.entry_signal(4)  # bar 4 breaks bar 3's high, headline is fresh
+    assert sig is not None
+    assert sig.target_r == 2.0
+
+
+def test_high_break_trail_signals_with_trail():
+    from trading_lab.strategies import HighBreakTrail
+
+    closes = [100 + 0.3 * k for k in range(20)]
+    opens = [c - 0.1 for c in closes]
+    highs = [c + 0.3 for c in closes]
+    lows = [c - 0.3 for c in closes]
+    day = make_day(opens, highs, lows, closes)
+    strat = HighBreakTrail(window_bars=6, trail_atr_mult=2.0)
+    strat.new_day(day, None)
+    sig = strat.entry_signal(10)  # steadily rising: above first-6-bar high and VWAP
+    assert sig is not None
+    assert sig.trail_dist is not None and sig.trail_dist > 0
+    assert sig.target_r is None  # rides the trail, no fixed target
+
+
 def test_rsi_reversion_buys_dip_above_vwap():
     # A long steady climb leaves VWAP well below price; then a sharp two-bar
     # dip drives Wilder RSI(2) under 10 while price still holds above VWAP.

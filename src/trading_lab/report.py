@@ -22,6 +22,9 @@ STRATEGIES = {
     "vwap_pullback": ("VWAP Pullback", "#1baf7a"),
     "ema_crossover": ("EMA 9/20 Crossover", "#eda100"),
     "rsi2_reversion": ("RSI(2) Reversion", "#e87ba4"),
+    "news_momentum": ("News Momentum", "#008300"),
+    "squeeze_breakout": ("Squeeze Breakout", "#4a3aa7"),
+    "high_break_trail": ("High-Break ATR Trail", "#e34948"),
 }
 
 SURFACE = "#fcfcfb"
@@ -33,7 +36,7 @@ BASELINE = "#c3c2b7"
 
 
 def equity_chart(trades: pd.DataFrame, path: Path) -> None:
-    fig, ax = plt.subplots(figsize=(11, 5.5), dpi=100)
+    fig, ax = plt.subplots(figsize=(11, 6.2), dpi=100)
     fig.patch.set_facecolor(SURFACE)
     ax.set_facecolor(SURFACE)
 
@@ -53,7 +56,7 @@ def equity_chart(trades: pd.DataFrame, path: Path) -> None:
 
     ax.axhline(0, color=BASELINE, linewidth=1)
     ax.set_title(
-        "Cumulative P&L by strategy", loc="left", fontsize=14, fontweight="bold", color=INK, pad=40
+        "Cumulative P&L by strategy", loc="left", fontsize=14, fontweight="bold", color=INK, pad=72
     )
     ax.set_ylabel("P&L per $10k trade size (USD)", color=INK_2, fontsize=10)
     ax.grid(axis="y", color=GRID, linewidth=0.8)

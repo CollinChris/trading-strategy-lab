@@ -1,0 +1,38 @@
+name: Paper journal (nightly)
+
+# After the close: reconstruct today's filled paper trades (with market
+# conditions at entry) and commit them to results/paper_journal.csv so the
+# tuning dataset accumulates in the repo.
+on:
+  schedule:
+    - cron: "30 21 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: paper-trading
+  cancel-in-progress: false
+
+jobs:
+  journal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Journal today's fills
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: uv run trading-lab journal
+      - name: Commit the journal
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add results/paper_journal.csv
+          git diff --cached --quiet && echo "No journal changes." && exit 0
+          git commit -m "journal: paper trades for $(date -u +%F)"
+          git push

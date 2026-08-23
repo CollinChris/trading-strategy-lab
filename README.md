@@ -69,19 +69,25 @@ shows **positive out-of-sample expectancy**. That gate is currently unmet.
 | **VWAP Pullback** | Momentum continuation (Warrior-Trading style) | Green day tags session VWAP and holds; buy the bounce confirmation; stop under VWAP; 2R target |
 | **EMA 9/20 Crossover** | Trend following | Buy 9-EMA crossing above 20-EMA while above VWAP; exit on cross-down; stop = 5-bar low |
 | **RSI(2) Reversion** | Mean reversion (Connors-style, intraday) | Buy RSI(2) < 10 dips while above VWAP; exit RSI(2) > 60; 1% stop |
+| **News Momentum** | Catalyst momentum | Fresh headline (≤45 min, via Alpaca's news API) + breakout of prior bar high on 1.5× volume above VWAP; stop = 3-bar low; 2R target |
+| **Squeeze Breakout** | Volatility expansion | Bollinger bandwidth at its tightest of the last hour, then first close above the upper band; stop = middle band; 2R target |
+| **High-Break ATR Trail** | Momentum, trailing exit | Break of the first-hour high above VWAP; no fixed target — stop trails the high by 2×ATR so winners run |
 
 All long-only, max 1–3 trades per symbol per day, everything flat by 15:55 ET.
 
 ## How it works
 
 ```
-yfinance 5m bars ──▶ strategies (signals on completed bars)
-                        │
-                        ▼
+yfinance 5m bars + Alpaca news ──▶ strategies (signals on completed bars)
+                                      │
+                                      ▼
              event-driven backtest engine ──▶ metrics ──▶ results/RESULTS.md + chart
-                        │
-                        ▼ (same Strategy classes, live bars)
-             Alpaca paper executor (bracket orders)
+                                      │            └──▶ per-trade journal w/ market conditions
+                                      ▼ (same Strategy classes, live bars)
+             Alpaca paper executor (bracket orders, GitHub Actions cron)
+                                      │
+                                      ▼ nightly
+             results/paper_journal.csv — real fills + conditions, committed back
 ```
 
 The engine is deliberately paranoid about **lookahead bias**:
@@ -113,11 +119,98 @@ uv run trading-lab paper --dry-run   # show what would be ordered, submit nothin
 uv run trading-lab paper             # submit bracket orders to the paper account
 uv run trading-lab paper --status    # open positions
 uv run trading-lab paper --flatten   # EOD discipline: close everything (~15:55 ET)
+uv run trading-lab journal           # append today's fills to results/paper_journal.csv
 ```
 
 The scanner runs once and exits (cron it during US market hours). One paper
 trade per strategy+symbol per day; dynamic-exit strategies run stop-only
 brackets and rely on `--flatten` for the end-of-day exit.
+
+## User guide — the automated loop
+
+Once the repo has `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` as Actions secrets,
+three GitHub Actions workflows run the whole loop unattended. No machine needs
+to be on.
+
+### What runs, and when
+
+| Workflow | Cron (UTC) | US market time | Singapore time | What it does |
+|---|---|---|---|---|
+| `paper-scan` | every 10 min, 13:00–19:59 Mon–Fri | 9:00am–3:59pm ET | 9:00pm–3:59am | Checks the latest completed 5-min bar for all 8 strategies × 6 symbols; fires bracket orders (entry + stop + target) at the paper account. Scans outside the 09:35–15:30 ET entry window exit immediately without trading. |
+| `paper-flatten` | 19:55 & 20:55 Mon–Fri | 3:55pm ET (+ EST-season backup) | 3:55am / 4:55am | Closes every open paper position and cancels open orders — day-trading discipline, nothing held overnight. |
+| `paper-journal` | 21:30 Mon–Fri | 5:30pm ET | 5:30am | Pulls the day's actual fills from Alpaca, computes the market conditions at each entry, appends rows to `results/paper_journal.csv`, and **commits the file back to the repo**. |
+
+So each weekday: up to ~42 scans, one flatten, one journal commit. GitHub's
+cron is UTC and ignores US daylight saving — **in November, shift the scan and
+journal hours in `.github/workflows/*.yml` by +1** (the flatten workflow
+already has its EST backup run built in).
+
+### What updates automatically vs manually
+
+**Automatic (no action needed):**
+- `results/paper_journal.csv` — grows by one commit per trading day (only when
+  there were fills; zero-trade days commit nothing).
+- **Run logs** — every workflow run (each scan included) keeps its full console
+  log in the repo's **Actions tab** for ~90 days: which signals fired, which
+  orders were submitted, "[already today]" dedup notices, errors.
+- Positions, orders, and P&L — live on the
+  [Alpaca paper dashboard](https://app.alpaca.markets) at any moment.
+
+**Manual (run when you want fresh analysis):**
+- `uv run trading-lab backtest` — regenerates `results/RESULTS.md`, the equity
+  chart, and `results/trades.csv`. Not on a schedule; run it after changing
+  strategies or when you want the window refreshed, then commit.
+- `uv run trading-lab tune` — regenerates `results/TUNING.md`. Same deal.
+
+### Watching it work
+
+- **Browser:** repo → **Actions** tab → pick a workflow → open any run.
+- **Terminal:** `gh run list --limit 10` for recent runs,
+  `gh run watch` to follow one live,
+  `gh workflow run paper-scan.yml` to trigger a scan manually right now.
+- First thing tomorrow (SGT): check the Actions tab over breakfast — the
+  overnight session's scans, the 3:55am flatten, and the 5:30am journal commit
+  will all be there.
+
+### Pausing, resuming, changing things
+
+- **Pause everything:** `gh workflow disable paper-scan.yml` (repeat for
+  `paper-flatten.yml` / `paper-journal.yml`), or the "…" menu on the workflow
+  page. `enable` to resume. Disable the scanner but keep flatten enabled if
+  positions might still be open.
+- **Change the universe:** edit `DEFAULT_SYMBOLS` in `src/trading_lab/config.py`.
+- **Change sizing/slippage/cutoffs:** same file (`Config`).
+- **Change scan frequency:** the cron line in `paper-scan.yml` (don't go below
+  every 5 min — that's the bar size).
+- **Rotate keys:** regenerate on the Alpaca dashboard, then
+  `gh secret set ALPACA_API_KEY` / `ALPACA_SECRET_KEY` and update local `.env`.
+
+### Safety & troubleshooting
+
+- Duplicate protection is stateless: the deterministic `client_order_id`
+  (`strategy--symbol--date`) means Alpaca itself rejects a same-day
+  resubmission — "[already today]" in scan logs is normal, not an error.
+- Every order is a **paper** order: `paper=True` is hard-coded and these keys
+  only work against the paper API. Real money would require live keys, which
+  this project deliberately never uses (see the roadmap gate).
+- A scan that logs "outside the entry window" or "market closed? skipping" did
+  its job — those are the guards working.
+- If a workflow suddenly fails on every run: check whether the Alpaca keys were
+  regenerated (old secrets die the moment new keys are made).
+
+### The trade journal (the tuning dataset)
+
+Every trade — backtest (`results/trades.csv`) and paper
+(`results/paper_journal.csv`) — records the market conditions at entry:
+
+`mkt_gap_pct` (overnight gap) · `mkt_change_open_pct` (session open→entry) ·
+`mkt_dist_vwap_pct` (entry vs VWAP) · `mkt_rel_volume` (signal-bar volume vs
+day average) · `mkt_spy_change_pct` (what the index was doing) · `hour_et` ·
+`weekday`
+
+That's the raw material for the next phase: instead of asking "which stop is
+best?", ask "under which conditions does this strategy win at all?" — regime
+filters learned from the journal.
 
 ## Methodology & limitations (read before believing any number)
 
@@ -137,12 +230,14 @@ brackets and rely on `--flatten` for the end-of-day exit.
 
 - [x] v0.1 — five strategies, no-lookahead engine, first 60-day baseline
 - [x] v0.2 — parameter sweeps with train/test split → nothing survives out-of-sample yet
+- [x] v0.3 — three new strategies (news momentum, squeeze breakout, ATR-trail exits),
+      per-trade market-condition journal, GitHub Actions paper trading + nightly journal
 - [ ] Walk-forward validation (multiple train/test folds instead of one split)
-- [ ] Regime filters (trend/volatility gates; skip the days these setups bleed on)
-- [ ] Smarter exits: trailing stops, breakeven-after-1R
+- [ ] Regime filters learned from the journal (trade only where the conditions data says the strategy wins)
 - [ ] Longer history + true gappers via Alpaca's historical minute data
 - [ ] Short side for the momentum setups
-- [ ] **Gate:** first configuration with positive out-of-sample expectancy → 2+ weeks on the Alpaca paper account
+- [ ] **Gate:** paper trading is the data-collection lab; nothing touches real money
+      without sustained positive out-of-sample **and** paper expectancy
 
 Progress log: [PROGRESS.md](PROGRESS.md).
 

@@ -34,3 +34,29 @@ def session_vwap(day: pd.DataFrame) -> pd.Series:
     typical = (day["high"] + day["low"] + day["close"]) / 3.0
     cum_vol = day["volume"].cumsum()
     return (typical * day["volume"]).cumsum() / cum_vol.replace(0, np.nan)
+
+
+def atr(day: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Wilder average true range."""
+    prev_close = day["close"].shift(1)
+    tr = pd.concat(
+        [
+            day["high"] - day["low"],
+            (day["high"] - prev_close).abs(),
+            (day["low"] - prev_close).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
+    return tr.ewm(alpha=1.0 / period, adjust=False).mean()
+
+
+def bollinger(
+    close: pd.Series, period: int = 20, num_std: float = 2.0
+) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    """(mid, upper, lower, bandwidth). Bandwidth = (upper - lower) / mid."""
+    mid = close.rolling(period, min_periods=period).mean()
+    std = close.rolling(period, min_periods=period).std(ddof=0)
+    upper = mid + num_std * std
+    lower = mid - num_std * std
+    bandwidth = (upper - lower) / mid
+    return mid, upper, lower, bandwidth

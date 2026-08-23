@@ -3,6 +3,40 @@
 A running record of what was built, what the data said, and what changed my
 mind — kept honest for portfolio purposes.
 
+## 2026-08-23 — v0.3: news strategy goes live, automation, and the journal
+
+**Built.** Three new strategies — **News Momentum** (fresh Alpaca-API headline
++ breakout confirmation), **Squeeze Breakout** (Bollinger contraction →
+expansion), and **High-Break ATR Trail** (the roadmap's trailing-stop
+experiment) — plus engine support for trailing stops. Every trade now records
+a **market-condition snapshot at entry** (gap %, open→entry move, VWAP
+distance, relative volume, SPY context, hour, weekday): the tuning dataset the
+next phase will learn regime filters from. And the loop is now unattended:
+GitHub Actions scan every 10 minutes of the US session, flatten at 15:55 ET,
+and commit each day's actual paper fills to `results/paper_journal.csv`
+overnight.
+
+**First 8-strategy run (1,391 trades).**
+
+- **News Momentum is the first strategy in the lab above water**: profit
+  factor 1.04, expectancy **+$1.62/trade** (30 trades). Honesty required on
+  two counts: 30 trades is a small sample, and this is the full window — the
+  out-of-sample check comes from the tuner and, more importantly, from live
+  paper fills accumulating in the journal.
+- **The trailing stop beat most fixed targets**: High-Break ATR Trail's
+  average win is 1.5× its average loss (PF 0.89) — better than three of the
+  four original fixed-2R momentum setups. Exits matter more than entries here.
+- **Squeeze Breakout flopped** (PF 0.34, −$35.5/trade): on liquid mega caps,
+  intraday band squeezes appear to resolve as chop, not expansion. Candidate
+  for deletion rather than tuning.
+- A data lesson: the first news run silently covered only two-thirds of the
+  price window, quietly starving the news strategy of a month of signals —
+  found by cross-checking date ranges, fixed by widening the fetch window.
+
+**Next.** Let the paper loop and journal run for a couple of weeks; check the
+tuner's out-of-sample verdict on News Momentum; then mine the journal's
+condition columns for regime filters.
+
 ## 2026-08-23 — v0.2: parameter tuning, and the overfitting lesson
 
 **Goal.** v0.1's numbers were all negative, so before anything touches paper

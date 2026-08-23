@@ -97,3 +97,28 @@ def test_trade_cap_respected(flat_day):
 def test_qty_from_notional(flat_day):
     trades = run_symbol_day(SignalAtBar(at=2, stop_pct=0.5), "TST", DATE, flat_day, None, CFG)
     assert trades[0].qty == int(CFG.notional_per_trade // 100.0)
+
+
+def test_trailing_stop_ratchets(flat_day):
+    day = flat_day.copy()
+    # Entry at bar 3 open (100). Bar 4 runs to 110 -> trail (dist 3) lifts the
+    # stop to 107. Bar 5 dips to 106.5, which must hit the ratcheted stop.
+    day.loc[day.index[4], "high"] = 110.0
+    day.loc[day.index[5], "low"] = 106.5
+    strat = SignalAtBar(at=2, stop_price=97.0)
+    strat.sig = EntrySignal("trail-test", stop_price=97.0, trail_dist=3.0)
+    trades = run_symbol_day(strat, "TST", DATE, day, None, CFG)
+    assert len(trades) == 1
+    assert trades[0].exit_reason == "stop"
+    assert trades[0].exit_price == 107.0  # 110 high - 3.0 trail, not the 97 initial stop
+    assert trades[0].pnl > 0  # a trailing stop that locks in profit
+
+
+def test_conditions_recorded(flat_day):
+    trades = run_symbol_day(
+        SignalAtBar(at=2, stop_pct=0.5), "TST", DATE, flat_day, prior_close=98.0, cfg=CFG
+    )
+    t = trades[0]
+    assert abs(t.mkt_gap_pct - ((100.0 / 98.0 - 1) * 100)) < 0.01
+    assert t.weekday == "Mon"  # 2026-08-17
+    assert 9.5 <= t.hour_et <= 16.0
