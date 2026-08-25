@@ -1,11 +1,13 @@
 name: Paper flatten (EOD)
 
-# Close everything just before the bell: 19:55 UTC = 15:55 ET during EDT.
-# The 20:55 run is the EST-season safety net (a no-op in summer: 0 positions).
+# Close everything before the bell: 19:40 UTC = 15:40 ET during EDT. GitHub
+# cron regularly fires 15-25 min late (on 2026-08-24 the 19:55 run started at
+# 20:13, after the close, so positions were held overnight) — the buffer
+# absorbs that. The 20:40 run is the EST-season safety net (a summer no-op).
 on:
   schedule:
-    - cron: "55 19 * * 1-5"
-    - cron: "55 20 * * 1-5"
+    - cron: "40 19 * * 1-5"
+    - cron: "40 20 * * 1-5"
   workflow_dispatch:
 
 concurrency:

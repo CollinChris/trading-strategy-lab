@@ -237,7 +237,9 @@ def journal(cfg: Config) -> None:
             days = {date: (day, prior) for date, day, prior in split_days(bars)}
             if today in days:
                 day, prior_close = days[today]
-                i = max(0, day.index.searchsorted(entry_time) - 1)
+                # Alpaca fill times carry sub-second precision; match the bar
+                # index's datetime unit or searchsorted refuses the conversion.
+                i = max(0, day.index.searchsorted(entry_time.as_unit(day.index.unit)) - 1)
                 conditions = entry_conditions(
                     day,
                     int(i),
