@@ -181,7 +181,9 @@ def journal(cfg: Config) -> None:
     with entry/exit fills from Alpaca plus the same market-condition snapshot
     the backtester records — so paper results accumulate into a tuning dataset.
     Exits closed by --flatten instead of a bracket leg are matched best-effort
-    to the day's last sell fill for that symbol.
+    to the earliest sell fill for that symbol after the entry. A trade whose
+    position is still open is journaled with exit_reason="open" and re-visited
+    on later runs; once its exit fills, the placeholder row is replaced.
     """
     from alpaca.trading.enums import QueryOrderStatus
     from alpaca.trading.requests import GetOrdersRequest
@@ -192,16 +194,28 @@ def journal(cfg: Config) -> None:
     client = _client()
     today = market_today()
     day_start = dt.datetime.combine(today, dt.time(0, 0), tzinfo=MARKET_TZ)
+    # Look back several days, not just today, so an entry journaled while the
+    # position was still open (e.g. held overnight after a missed flatten) is
+    # found again and its exit fill can be recorded.
     orders = client.get_orders(
-        GetOrdersRequest(status=QueryOrderStatus.CLOSED, after=day_start, limit=500, nested=True)
+        GetOrdersRequest(
+            status=QueryOrderStatus.CLOSED,
+            after=day_start - dt.timedelta(days=5),
+            limit=500,
+            nested=True,
+        )
     )
 
     bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d")
     spy_by_date = load_spy_by_date(Config(symbols=cfg.symbols, period="5d"))
 
-    already = set()
-    if JOURNAL_PATH.exists():
-        already = set(pd.read_csv(JOURNAL_PATH)["client_order_id"].astype(str))
+    existing = pd.read_csv(JOURNAL_PATH) if JOURNAL_PATH.exists() else None
+    already: set[str] = set()
+    open_already: set[str] = set()
+    if existing is not None:
+        ids = existing["client_order_id"].astype(str)
+        open_already = set(ids[existing["exit_reason"] == "open"])
+        already = set(ids) - open_already
 
     flatten_sells: dict[str, list] = {}
     for o in orders:
@@ -217,6 +231,7 @@ def journal(cfg: Config) -> None:
         strategy_name = tag.split("--")[0]
         entry_price = float(o.filled_avg_price)
         entry_time = pd.Timestamp(o.filled_at).tz_convert(MARKET_TZ)
+        entry_date = entry_time.date()
         qty = int(float(o.filled_qty))
 
         exit_price, exit_time, exit_reason = None, None, "open"
@@ -225,18 +240,24 @@ def journal(cfg: Config) -> None:
                 exit_price = float(leg.filled_avg_price)
                 exit_time = pd.Timestamp(leg.filled_at).tz_convert(MARKET_TZ)
                 exit_reason = "stop" if "stop" in str(leg.type).lower() else "target"
-        if exit_price is None and flatten_sells.get(o.symbol):
-            sell = flatten_sells[o.symbol][-1]
-            exit_price = float(sell.filled_avg_price)
-            exit_time = pd.Timestamp(sell.filled_at).tz_convert(MARKET_TZ)
-            exit_reason = "eod"
+        if exit_price is None:
+            # Earliest sell fill after the entry: an overnight hold closes at
+            # the next open, before any later same-symbol trade that day.
+            sells = [s for s in flatten_sells.get(o.symbol, []) if s.filled_at > o.filled_at]
+            if sells:
+                sell = min(sells, key=lambda s: s.filled_at)
+                exit_price = float(sell.filled_avg_price)
+                exit_time = pd.Timestamp(sell.filled_at).tz_convert(MARKET_TZ)
+                exit_reason = "eod"
+        if exit_price is None and tag in open_already:
+            continue  # still open and already journaled as such — nothing new
 
         conditions = {}
         bars = bars_by_symbol.get(o.symbol)
         if bars is not None:
             days = {date: (day, prior) for date, day, prior in split_days(bars)}
-            if today in days:
-                day, prior_close = days[today]
+            if entry_date in days:
+                day, prior_close = days[entry_date]
                 # Alpaca fill times carry sub-second precision; match the bar
                 # index's datetime unit or searchsorted refuses the conversion.
                 i = max(0, day.index.searchsorted(entry_time.as_unit(day.index.unit)) - 1)
@@ -246,13 +267,13 @@ def journal(cfg: Config) -> None:
                     entry_price,
                     prior_close,
                     session_vwap(day),
-                    spy_by_date.get(today),
+                    spy_by_date.get(entry_date),
                 )
 
         rows.append(
             {
                 "client_order_id": tag,
-                "date": today.isoformat(),
+                "date": entry_date.isoformat(),
                 "strategy": strategy_name,
                 "symbol": o.symbol,
                 "qty": qty,
@@ -270,7 +291,11 @@ def journal(cfg: Config) -> None:
         print("No new filled paper trades to journal.")
         return
     frame = pd.DataFrame(rows)
+    updated = sum(1 for r in rows if r["client_order_id"] in open_already)
+    if existing is not None:
+        # A re-visited trade replaces its open placeholder row.
+        kept = existing[~existing["client_order_id"].astype(str).isin(set(frame["client_order_id"]))]
+        frame = pd.concat([kept, frame], ignore_index=True)
     JOURNAL_PATH.parent.mkdir(exist_ok=True)
-    header = not JOURNAL_PATH.exists()
-    frame.to_csv(JOURNAL_PATH, mode="a", header=header, index=False)
-    print(f"Journaled {len(frame)} trade(s) → {JOURNAL_PATH}")
+    frame.to_csv(JOURNAL_PATH, index=False)
+    print(f"Journaled {len(rows)} trade(s), {updated} exit update(s) → {JOURNAL_PATH}")
