@@ -1,0 +1,6 @@
+client_order_id,date,strategy,symbol,qty,entry_time,entry_price,exit_time,exit_price,exit_reason,pnl,mkt_gap_pct,mkt_change_open_pct,mkt_dist_vwap_pct,mkt_rel_volume,mkt_spy_change_pct,hour_et,weekday
+rsi2_reversion--PLTR--2026-08-24,2026-08-24,rsi2_reversion,PLTR,56,2026-08-24 13:39:26.718885-04:00,177.66,2026-08-24 15:59:53.886226-04:00,175.8,stop,-104.16,-1.384,0.118,1.403,0.37,-0.182,13.58,Mon
+rsi2_reversion--AMD--2026-08-24,2026-08-24,rsi2_reversion,AMD,21,2026-08-24 13:39:26.912880-04:00,457.91,,,open,,-1.01,-2.151,-0.056,0.45,-0.182,13.58,Mon
+high_break_trail--PLTR--2026-08-24,2026-08-24,high_break_trail,PLTR,56,2026-08-24 13:02:45.251389-04:00,177.69,2026-08-24 15:05:37.890444-04:00,176.22,stop,-82.32,-1.384,0.135,1.541,0.47,-0.101,13.0,Mon
+squeeze_breakout--PLTR--2026-08-24,2026-08-24,squeeze_breakout,PLTR,56,2026-08-24 13:02:46.308981-04:00,177.69,2026-08-24 13:05:06.459284-04:00,177.359465,stop,-18.51,-1.384,0.135,1.541,0.47,-0.101,13.0,Mon
+orb--MSTR--2026-08-24,2026-08-24,orb,MSTR,79,2026-08-24 10:27:06.570609-04:00,125.345696,,,open,,2.18,2.877,2.508,0.99,-0.243,10.42,Mon
