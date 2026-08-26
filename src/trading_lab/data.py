@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -30,13 +31,44 @@ def _normalize(frame: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _download(symbols: list[str], interval: str, period: str, threads: bool) -> dict[str, pd.DataFrame]:
+    """One yf.download pass, normalized per symbol; a failed symbol comes back empty."""
+    raw = yf.download(
+        tickers=" ".join(symbols),
+        interval=interval,
+        period=period,
+        auto_adjust=True,
+        group_by="ticker",
+        progress=False,
+        threads=threads,
+    )
+    out: dict[str, pd.DataFrame] = {}
+    for sym in symbols:
+        try:
+            frame = raw[sym] if len(symbols) > 1 else raw.droplevel("Ticker", axis=1)
+            out[sym] = _normalize(frame)
+        except Exception:  # noqa: BLE001 — a symbol absent from the batch is just a failed download
+            out[sym] = pd.DataFrame(columns=COLUMNS)
+    return out
+
+
 def load_bars(
-    symbols: list[str], interval: str, period: str, cache_dir: Path = CACHE_DIR
+    symbols: list[str],
+    interval: str,
+    period: str,
+    cache_dir: Path = CACHE_DIR,
+    on_missing: str = "raise",
 ) -> dict[str, pd.DataFrame]:
     """Intraday OHLCV per symbol (tz-aware America/New_York index).
 
     Cached to disk per symbol; the cache is reused only if written today,
     so repeated runs on the same day don't refetch.
+
+    Symbols whose download fails are retried single-threaded (yfinance's
+    sqlite cache throws transient 'database is locked' errors under its own
+    threading). If a symbol still has no data: on_missing="raise" aborts
+    (backtests must not silently drop a symbol), "skip" warns and leaves it
+    out of the result (paper runs repeat all day — missing one pass is fine).
     """
     cache_dir.mkdir(exist_ok=True)
     today = market_today().isoformat()
@@ -54,24 +86,24 @@ def load_bars(
             missing.append(sym)
 
     if missing:
-        raw = yf.download(
-            tickers=" ".join(missing),
-            interval=interval,
-            period=period,
-            auto_adjust=True,
-            group_by="ticker",
-            progress=False,
-            threads=True,
-        )
+        frames = _download(missing, interval, period, threads=True)
+        for attempt in (1, 2):
+            failed = [sym for sym in missing if frames[sym].empty]
+            if not failed:
+                break
+            time.sleep(2 * attempt)
+            frames.update(_download(failed, interval, period, threads=False))
         for sym in missing:
-            frame = raw[sym] if len(missing) > 1 else raw.droplevel("Ticker", axis=1)
-            bars = _normalize(frame)
+            bars = frames[sym]
             if bars.empty:
+                if on_missing == "skip":
+                    print(f"warning: no data for {sym} after retries — skipping it this run")
+                    continue
                 raise RuntimeError(f"No data returned for {sym}")
             bars.to_pickle(cache_dir / f"{sym}_{interval}_{period}.pkl")
             result[sym] = bars
 
-    return {sym: result[sym] for sym in symbols}
+    return {sym: result[sym] for sym in symbols if sym in result}
 
 
 def load_news(

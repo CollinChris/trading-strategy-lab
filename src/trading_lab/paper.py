@@ -70,7 +70,7 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     state = _load_state()
     done_today: list[str] = state.get(today, [])
 
-    bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d")
+    bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d", on_missing="skip")
     news = load_news(cfg.symbols, cfg.interval, period="3d")
     client = None if dry_run else _client()
     placed = 0
@@ -206,8 +206,12 @@ def journal(cfg: Config) -> None:
         )
     )
 
-    bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d")
-    spy_by_date = load_spy_by_date(Config(symbols=cfg.symbols, period="5d"))
+    bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d", on_missing="skip")
+    try:
+        spy_by_date = load_spy_by_date(Config(symbols=cfg.symbols, period="5d"))
+    except Exception as exc:  # noqa: BLE001 — conditions are best-effort; journal the fills regardless
+        print(f"warning: SPY conditions unavailable ({exc})")
+        spy_by_date = {}
 
     existing = pd.read_csv(JOURNAL_PATH) if JOURNAL_PATH.exists() else None
     already: set[str] = set()
