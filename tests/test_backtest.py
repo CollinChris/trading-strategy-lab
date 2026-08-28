@@ -122,3 +122,24 @@ def test_conditions_recorded(flat_day):
     assert abs(t.mkt_gap_pct - ((100.0 / 98.0 - 1) * 100)) < 0.01
     assert t.weekday == "Mon"  # 2026-08-17
     assert 9.5 <= t.hour_et <= 16.0
+
+
+def test_ts_conditions_causal_and_sane():
+    # Rising first half, crash after bar 10 — the entry at bar 3 must only see the rise.
+    import numpy as np
+    from conftest import make_day
+    from trading_lab.backtest import entry_conditions
+    from trading_lab.indicators import session_vwap
+
+    closes = np.concatenate([100 * 1.002 ** np.arange(11), np.full(9, 50.0)])
+    day = make_day(closes, closes + 0.2, closes - 0.2, closes)
+    vwap = session_vwap(day)
+
+    cond = entry_conditions(day, 3, float(closes[3]), 100.0, vwap, None)
+    assert cond["mkt_trend_slope_pct"] > 0  # crash at bar 11 is invisible at bar 3
+    assert cond["mkt_realized_vol_pct"] < 0.1  # smooth compounding = near-zero vol
+    assert cond["mkt_range_pos"] == 0.8  # entry 100.6 in the 99.8–100.8 day-so-far range
+    assert 0 < cond["mkt_atr_pct"] < 2.0
+
+    flat = entry_conditions(day, 3, float(closes[3]), None, vwap, None)
+    assert flat["mkt_trend_slope_pct"] == cond["mkt_trend_slope_pct"]

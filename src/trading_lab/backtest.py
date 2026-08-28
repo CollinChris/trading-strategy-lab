@@ -17,11 +17,12 @@ import datetime as dt
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 
 from .config import Config
 from .data import load_bars, load_news, split_days
-from .indicators import session_vwap
+from .indicators import atr, session_vwap
 from .strategies import all_strategies
 from .strategies.base import EntrySignal, Strategy
 
@@ -59,6 +60,12 @@ class Trade:
     mkt_dist_vwap_pct: float = float("nan")  # entry price vs session VWAP
     mkt_rel_volume: float = float("nan")  # signal-bar volume vs day-so-far average
     mkt_spy_change_pct: float = float("nan")  # SPY session open -> entry time
+    # Time-series features of the session so far (all causal, bars 0..i):
+    mkt_realized_vol_pct: float = float("nan")  # daily-ized std of 5m log returns
+    mkt_trend_slope_pct: float = float("nan")  # OLS drift of log close, % per bar
+    mkt_autocorr_1: float = float("nan")  # lag-1 autocorrelation of returns
+    mkt_atr_pct: float = float("nan")  # ATR(14) as % of the signal bar's close
+    mkt_range_pos: float = float("nan")  # entry inside day-so-far range (0=low, 1=high)
     hour_et: float = float("nan")  # entry hour (US/Eastern, decimal)
     weekday: str = ""
 
@@ -86,12 +93,36 @@ def entry_conditions(
         spy_close = spy_day["close"].asof(ts)
         if pd.notna(spy_close):
             spy_change = (float(spy_close) / float(spy_day["open"].iloc[0]) - 1.0) * 100.0
+
+    # Time-series features from bars 0..i only. sqrt(78) daily-izes 5m bar vol
+    # (78 regular-hours bars per session — the lab's fixed interval).
+    closes = day["close"].iloc[: i + 1].to_numpy(dtype=float)
+    rets = np.diff(np.log(closes))
+    rvol = float(np.std(rets, ddof=1) * np.sqrt(78.0) * 100.0) if len(rets) >= 2 else float("nan")
+    slope = (
+        float(np.polyfit(np.arange(len(closes)), np.log(closes), 1)[0] * 100.0)
+        if len(closes) >= 3
+        else float("nan")
+    )
+    ac1 = float("nan")
+    if len(rets) >= 3 and np.std(rets[:-1]) > 0 and np.std(rets[1:]) > 0:
+        ac1 = float(np.corrcoef(rets[:-1], rets[1:])[0, 1])
+    atr_pct = float(atr(day).iloc[i] / closes[-1] * 100.0) if i >= 1 else float("nan")
+    hi = float(day["high"].iloc[: i + 1].max())
+    lo = float(day["low"].iloc[: i + 1].min())
+    range_pos = (entry_price - lo) / (hi - lo) if hi > lo else float("nan")
+
     return {
         "mkt_gap_pct": round(gap, 3),
         "mkt_change_open_pct": round((entry_price / day_open - 1.0) * 100.0, 3),
         "mkt_dist_vwap_pct": round((entry_price / float(vwap.iloc[i]) - 1.0) * 100.0, 3),
         "mkt_rel_volume": round(rel_vol, 2),
         "mkt_spy_change_pct": round(spy_change, 3),
+        "mkt_realized_vol_pct": round(rvol, 3),
+        "mkt_trend_slope_pct": round(slope, 4),
+        "mkt_autocorr_1": round(ac1, 3),
+        "mkt_atr_pct": round(atr_pct, 3),
+        "mkt_range_pos": round(range_pos, 3),
         "hour_et": round(ts.hour + ts.minute / 60.0, 2),
         "weekday": ts.strftime("%a"),
     }
