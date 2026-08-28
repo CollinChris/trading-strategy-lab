@@ -15,6 +15,9 @@ def main() -> None:
     bt.add_argument("--symbols", nargs="*", default=DEFAULT_SYMBOLS)
     bt.add_argument("--interval", default="5m")
     bt.add_argument("--period", default="60d")
+    bt.add_argument(
+        "--vol-sizing", action="store_true", help="ATR stops + fixed dollar risk per trade"
+    )
 
     tn = sub.add_parser("tune", help="grid-search parameters on a train split, validate held-out")
     tn.add_argument("--symbols", nargs="*", default=DEFAULT_SYMBOLS)
@@ -22,6 +25,9 @@ def main() -> None:
 
     pp = sub.add_parser("paper", help="scan latest bars and place Alpaca paper orders")
     pp.add_argument("--dry-run", action="store_true", help="print orders instead of submitting")
+    pp.add_argument(
+        "--vol-sizing", action="store_true", help="ATR stops + fixed dollar risk per trade"
+    )
     pp.add_argument("--flatten", action="store_true", help="close all paper positions/orders")
     pp.add_argument("--status", action="store_true", help="show paper positions and open orders")
 
@@ -36,7 +42,12 @@ def main() -> None:
         from .metrics import summarize
         from .report import write_report
 
-        cfg = Config(symbols=args.symbols, interval=args.interval, period=args.period)
+        cfg = Config(
+            symbols=args.symbols,
+            interval=args.interval,
+            period=args.period,
+            vol_sizing=args.vol_sizing,
+        )
         trades = run_backtest(cfg)
         if trades.empty:
             print("No trades generated — check symbols/period.")
@@ -60,7 +71,7 @@ def main() -> None:
         elif args.status:
             paper.status()
         else:
-            paper.scan_and_trade(Config(), dry_run=args.dry_run)
+            paper.scan_and_trade(Config(vol_sizing=args.vol_sizing), dry_run=args.dry_run)
 
     elif args.command == "journal":
         from . import paper

@@ -23,8 +23,10 @@ from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 
+from .backtest import position_size
 from .config import Config
 from .data import MARKET_TZ, load_bars, load_news, market_today, split_days
+from .indicators import atr
 from .strategies import all_strategies
 
 STATE_PATH = Path("data/paper_state.json")
@@ -105,9 +107,11 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
                 if sig.stop_price is not None
                 else last_price * (1 - (sig.stop_pct or 0.01))
             )
+            if cfg.vol_sizing and sig.stop_price is None:
+                stop = last_price - cfg.stop_atr_mult * float(atr(day).iloc[-1])
             if stop >= last_price:
                 continue
-            qty = int(cfg.notional_per_trade // last_price)
+            qty = position_size(last_price, stop, cfg)
             if qty < 1:
                 continue
             target = last_price + sig.target_r * (last_price - stop) if sig.target_r else None

@@ -143,3 +143,30 @@ def test_ts_conditions_causal_and_sane():
 
     flat = entry_conditions(day, 3, float(closes[3]), None, vwap, None)
     assert flat["mkt_trend_slope_pct"] == cond["mkt_trend_slope_pct"]
+
+
+def test_position_size_modes():
+    from trading_lab.backtest import position_size
+
+    assert position_size(100.0, 99.0, Config()) == 100  # fixed notional: 10_000 // 100
+    cfg = Config(vol_sizing=True, risk_per_trade=100.0)
+    assert position_size(100.0, 98.5, cfg) == 66  # $100 risk / $1.50 to the stop
+    assert position_size(100.0, 99.99, cfg) == 100  # tight stop capped by notional
+    assert position_size(100.0, 101.0, cfg) == 0  # stop above entry: no trade
+
+
+def test_vol_sizing_uses_atr_stop(flat_day):
+    # flat_day bars have a constant true range of 1.0, so ATR(14) == 1.0 and the
+    # engine should replace the strategy's 5% stop with entry - 1.5 * ATR.
+    cfg = Config(slippage_bps=0.0, vol_sizing=True, risk_per_trade=100.0, stop_atr_mult=1.5)
+    day = flat_day.copy()
+    day.loc[day.index[5], "low"] = 98.0  # dive through the ATR stop at 98.5
+    trades = run_symbol_day(SignalAtBar(at=2, stop_pct=0.05), "TST", DATE, day, None, cfg)
+    t = trades[0]
+    assert t.qty == 66  # $100 risk / $1.50 stop distance
+    assert t.exit_reason == "stop"
+    assert abs(t.exit_price - 98.5) < 1e-6  # 100 - 1.5 * ATR(1.0)
+
+    # A structural stop_price is left where the strategy put it.
+    trades = run_symbol_day(SignalAtBar(at=2, stop_price=99.9), "TST", DATE, day, None, cfg)
+    assert abs(trades[0].exit_price - 99.9) < 1e-6

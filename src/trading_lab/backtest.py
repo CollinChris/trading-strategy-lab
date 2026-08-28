@@ -133,6 +133,17 @@ def _fill_price(price: float, slippage_bps: float, side: str) -> float:
     return price * (1 + adj) if side == "buy" else price * (1 - adj)
 
 
+def position_size(entry: float, stop: float, cfg: Config) -> int:
+    """Shares to buy. Default: fixed notional. vol_sizing: fixed dollar risk to
+    the stop (risk parity across volatility regimes), still notional-capped."""
+    if not cfg.vol_sizing:
+        return int(cfg.notional_per_trade // entry)
+    risk = entry - stop
+    if risk <= 0:
+        return 0
+    return int(min(cfg.risk_per_trade / risk, cfg.notional_per_trade / entry))
+
+
 def run_symbol_day(
     strategy: Strategy,
     symbol: str,
@@ -145,6 +156,7 @@ def run_symbol_day(
     strategy.symbol = symbol
     strategy.new_day(day, prior_close)
     vwap = session_vwap(day)
+    atr_series = atr(day) if cfg.vol_sizing else None
     entry_cutoff = dt.time.fromisoformat(cfg.entry_cutoff)
     eod_cutoff = dt.time.fromisoformat(cfg.eod_cutoff)
     trade_cap = min(cfg.max_trades_per_day, strategy.max_trades_per_day)
@@ -199,8 +211,11 @@ def run_symbol_day(
                 if sig.stop_price is not None
                 else entry * (1 - (sig.stop_pct or 0.01))
             )
+            if atr_series is not None and sig.stop_price is None:
+                # ATR from the completed signal bar (i-1) — bar i is still forming.
+                stop = entry - cfg.stop_atr_mult * float(atr_series.iloc[i - 1])
             if stop < entry:  # skip entries that gap through their own stop
-                qty = int(cfg.notional_per_trade // entry)
+                qty = position_size(entry, stop, cfg)
                 if qty > 0:
                     target = entry + sig.target_r * (entry - stop) if sig.target_r else None
                     conditions = entry_conditions(day, i, entry, prior_close, vwap, spy_day)

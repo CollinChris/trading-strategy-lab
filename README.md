@@ -241,8 +241,10 @@ filters learned from the journal.
 - [x] v0.2 — parameter sweeps with train/test split → nothing survives out-of-sample yet
 - [x] v0.3 — three new strategies (news momentum, squeeze breakout, ATR-trail exits),
       per-trade market-condition journal, GitHub Actions paper trading + nightly journal
-- [x] v0.4 — first time-series model (AR forecast on 5-min returns) + cross-session
-      strategy state in engine and paper scanner
+- [x] v0.4 — first time-series model (AR forecast on 5-min returns), cross-session
+      strategy state in engine and paper scanner, five time-series entry features in
+      the tuning dataset, and opt-in volatility-scaled risk (`--vol-sizing`: ATR stops
+      + fixed dollar risk — cuts max drawdowns ~2-3x in the 60-day baseline)
 - [ ] Walk-forward validation (multiple train/test folds instead of one split)
 - [ ] Regime filters learned from the journal (trade only where the conditions data says the strategy wins)
 - [ ] Longer history + true gappers via Alpaca's historical minute data
