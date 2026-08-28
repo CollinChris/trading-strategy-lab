@@ -3,9 +3,15 @@ name: Paper journal (nightly)
 # After the close: reconstruct today's filled paper trades (with market
 # conditions at entry) and commit them to results/paper_journal.csv so the
 # tuning dataset accumulates in the repo.
+# Three slots because GitHub's cron is best-effort and can drop a run
+# outright (it skipped 2026-08-27, leaving open rows unfilled). The journal
+# is idempotent — nothing new means no commit — so extras are free, and the
+# 14:30 UTC pass also catches exits that filled at the next day's open.
 on:
   schedule:
     - cron: "30 21 * * 1-5"
+    - cron: "30 23 * * 1-5"
+    - cron: "30 14 * * 1-5"
   workflow_dispatch:
 
 permissions:
