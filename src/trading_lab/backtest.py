@@ -224,8 +224,13 @@ def run_on(
     for symbol, bars in bars_by_symbol.items():
         days = split_days(bars)
         for strategy in make_strategies():
+            strategy.symbol = symbol
             for date, day, prior_close in days:
                 if dates is not None and date not in dates:
+                    # Show the session to the strategy anyway (still causal —
+                    # days arrive in order) so cross-session state like the AR
+                    # model's return window stays continuous across a split.
+                    strategy.new_day(day, prior_close)
                     continue
                 spy_day = spy_by_date.get(date) if spy_by_date else None
                 trades.extend(

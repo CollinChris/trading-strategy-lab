@@ -145,9 +145,9 @@ to be on.
 
 | Workflow | Cron (UTC) | US market time | Singapore time | What it does |
 |---|---|---|---|---|
-| `paper-scan` | every 10 min, 13:00–19:59 Mon–Fri | 9:00am–3:59pm ET | 9:00pm–3:59am | Checks the latest completed 5-min bar for all 8 strategies × 6 symbols; fires bracket orders (entry + stop + target) at the paper account. Scans outside the 09:35–15:30 ET entry window exit immediately without trading. |
-| `paper-flatten` | 19:55 & 20:55 Mon–Fri | 3:55pm ET (+ EST-season backup) | 3:55am / 4:55am | Closes every open paper position and cancels open orders — day-trading discipline, nothing held overnight. |
-| `paper-journal` | 21:30 Mon–Fri | 5:30pm ET | 5:30am | Pulls the day's actual fills from Alpaca, computes the market conditions at each entry, appends rows to `results/paper_journal.csv`, and **commits the file back to the repo**. |
+| `paper-scan` | every 10 min, 13:00–19:59 Mon–Fri | 9:00am–3:59pm ET | 9:00pm–3:59am | Checks the latest completed 5-min bar for all 9 strategies × 6 symbols; fires bracket orders (entry + stop + target) at the paper account. Scans outside the 09:35–15:30 ET entry window exit immediately without trading. |
+| `paper-flatten` | 19:40 & 20:40 Mon–Fri | 3:40pm ET (+ EST-season backup) | 3:40am / 4:40am | Closes every open paper position and cancels open orders — day-trading discipline, nothing held overnight. |
+| `paper-journal` | 21:30 Mon–Fri (+ 23:30 & next-day 14:30 retry slots) | 5:30pm ET | 5:30am | Pulls the day's actual fills from Alpaca, computes the market conditions at each entry, appends rows to `results/paper_journal.csv`, and **commits the file back to the repo**. |
 
 So each weekday: up to ~42 scans, one flatten, one journal commit. GitHub's
 cron is UTC and ignores US daylight saving — **in November, shift the scan and
@@ -241,6 +241,8 @@ filters learned from the journal.
 - [x] v0.2 — parameter sweeps with train/test split → nothing survives out-of-sample yet
 - [x] v0.3 — three new strategies (news momentum, squeeze breakout, ATR-trail exits),
       per-trade market-condition journal, GitHub Actions paper trading + nightly journal
+- [x] v0.4 — first time-series model (AR forecast on 5-min returns) + cross-session
+      strategy state in engine and paper scanner
 - [ ] Walk-forward validation (multiple train/test folds instead of one split)
 - [ ] Regime filters learned from the journal (trade only where the conditions data says the strategy wins)
 - [ ] Longer history + true gappers via Alpaca's historical minute data

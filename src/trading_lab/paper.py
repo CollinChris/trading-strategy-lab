@@ -90,6 +90,11 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
             if tag in done_today:
                 continue
             strategy.symbol = symbol
+            # Replay the loaded window's earlier sessions first so strategies
+            # with cross-session state (the AR model) see the same history in
+            # paper mode as in a backtest.
+            for _, past_day, past_prior in days[:-1]:
+                strategy.new_day(past_day, past_prior)
             strategy.new_day(day, prior_close)
             sig = strategy.entry_signal(len(day) - 1)
             if sig is None:

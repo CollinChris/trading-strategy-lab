@@ -4,6 +4,9 @@ Contract (enforced by the engine, relied on for zero lookahead):
 - new_day() is called once per session with the full day's bars; strategies may
   precompute CAUSAL indicator series (ema/rsi/vwap) but must only read values
   at index <= i inside entry_signal/exit_signal.
+- A strategy instance sees one symbol's sessions in chronological order, so it
+  may accumulate cross-session state in new_day() (e.g. a return history for
+  time-series models) — but only from sessions already handed to it.
 - entry_signal(i) is evaluated on the COMPLETED bar i; a resulting entry fills
   at bar i+1's open.
 - exit_signal(i, ...) likewise fills at bar i+1's open. Stops and targets are

@@ -27,6 +27,7 @@ from .data import load_bars, load_news, market_today, split_days
 from .metrics import summarize
 from .report import BASELINE, GRID, INK, INK_2, MUTED, STRATEGIES, SURFACE, _md_table
 from .strategies import (
+    ArForecast,
     EmaCrossover,
     GapAndGo,
     HighBreakTrail,
@@ -80,6 +81,10 @@ GRIDS: dict[str, tuple[type[Strategy], list[dict[str, Any]]]] = {
     "high_break_trail": (
         HighBreakTrail,
         _grid(window_bars=[6, 12], trail_atr_mult=[1.5, 2.0, 3.0]),
+    ),
+    "ar_forecast": (
+        ArForecast,
+        _grid(lags=[6, 12], horizon=[3, 6, 12], threshold=[0.001, 0.0015, 0.002]),
     ),
 }
 

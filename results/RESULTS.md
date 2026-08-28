@@ -1,6 +1,6 @@
 # Backtest results
 
-Generated 2026-08-23 · window **2026-05-28 → 2026-08-21** ·
+Generated 2026-08-28 · window **2026-06-03 → 2026-08-27** ·
 symbols **TSLA, NVDA, AMD, PLTR, COIN, MSTR** · bars **5m** ·
 **$10,000** per trade · slippage **5 bps/side** ·
 long-only, everything flat by 15:55 ET.
@@ -9,14 +9,15 @@ long-only, everything flat by 15:55 ET.
 
 | strategy | trades | win_rate_pct | avg_win | avg_loss | profit_factor | expectancy | total_pnl | max_drawdown | median_hold_min |
 |---|---|---|---|---|---|---|---|---|---|
-| RSI(2) Reversion | 396 | 52.0 | 23.12 | -47.72 | 0.53 | -10.87 | -4303.63 | -4917.66 | 15.0 |
-| Gap & Go | 4 | 50.0 | 286.85 | -331.13 | 0.87 | -22.14 | -88.56 | -400.2 | 290.0 |
-| Opening Range Breakout | 179 | 46.9 | 191.85 | -176.16 | 0.96 | -3.47 | -620.51 | -4614.89 | 330.0 |
-| News Momentum | 30 | 46.7 | 90.34 | -76.01 | 1.04 | 1.62 | 48.63 | -509.05 | 52.0 |
-| High-Break ATR Trail | 154 | 37.0 | 140.42 | -92.6 | 0.89 | -6.35 | -978.42 | -2959.17 | 125.0 |
-| VWAP Pullback | 246 | 34.6 | 124.14 | -87.43 | 0.75 | -14.33 | -3524.37 | -5611.0 | 50.0 |
-| EMA 9/20 Crossover | 240 | 27.5 | 89.67 | -54.89 | 0.62 | -15.14 | -3633.17 | -3703.42 | 58.0 |
-| Squeeze Breakout | 142 | 25.4 | 72.27 | -72.12 | 0.34 | -35.52 | -5043.13 | -5068.03 | 45.0 |
+| Gap & Go | 5 | 60.0 | 332.62 | -331.13 | 1.51 | 67.12 | 335.6 | -400.2 | 330.0 |
+| RSI(2) Reversion | 385 | 51.9 | 23.39 | -48.31 | 0.52 | -11.06 | -4259.1 | -4273.74 | 15.0 |
+| Opening Range Breakout | 177 | 44.6 | 198.47 | -174.12 | 0.92 | -7.82 | -1384.78 | -4592.22 | 335.0 |
+| AR Forecast | 545 | 43.5 | 50.04 | -53.45 | 0.72 | -8.44 | -4602.52 | -4947.63 | 20.0 |
+| News Momentum | 27 | 40.7 | 86.19 | -79.41 | 0.75 | -11.94 | -322.38 | -516.84 | 50.0 |
+| High-Break ATR Trail | 150 | 33.3 | 134.32 | -95.35 | 0.7 | -18.79 | -2819.04 | -3271.2 | 132.0 |
+| VWAP Pullback | 247 | 31.6 | 116.75 | -85.59 | 0.63 | -21.7 | -5358.91 | -6171.79 | 45.0 |
+| EMA 9/20 Crossover | 230 | 26.1 | 91.28 | -54.96 | 0.59 | -16.81 | -3865.34 | -4229.42 | 50.0 |
+| Squeeze Breakout | 145 | 24.1 | 70.21 | -71.32 | 0.31 | -37.16 | -5387.61 | -5330.82 | 40.0 |
 
 Win rate alone doesn't pay — a high-win-rate strategy with avg losses larger than
 avg wins can still lose money. Read it together with **profit_factor** (gross
@@ -28,14 +29,15 @@ wins / gross losses, >1 is profitable) and **expectancy** (avg $ per trade).
 
 | strategy | eod | signal | stop | target |
 |---|---|---|---|---|
-| EMA 9/20 Crossover | 19.6 | 59.2 | 21.2 | 0.0 |
-| Gap & Go | 50.0 | 0.0 | 50.0 | 0.0 |
-| High-Break ATR Trail | 31.2 | 0.0 | 68.8 | 0.0 |
-| News Momentum | 33.3 | 0.0 | 46.7 | 20.0 |
-| Opening Range Breakout | 67.0 | 0.0 | 25.7 | 7.3 |
-| RSI(2) Reversion | 0.0 | 84.8 | 15.2 | 0.0 |
-| Squeeze Breakout | 26.8 | 0.0 | 66.2 | 7.0 |
-| VWAP Pullback | 17.9 | 0.0 | 60.6 | 21.5 |
+| AR Forecast | 0.0 | 85.5 | 14.5 | 0.0 |
+| EMA 9/20 Crossover | 20.9 | 57.4 | 21.7 | 0.0 |
+| Gap & Go | 60.0 | 0.0 | 40.0 | 0.0 |
+| High-Break ATR Trail | 29.3 | 0.0 | 70.7 | 0.0 |
+| News Momentum | 25.9 | 0.0 | 51.9 | 22.2 |
+| Opening Range Breakout | 67.2 | 0.0 | 26.6 | 6.2 |
+| RSI(2) Reversion | 0.0 | 84.2 | 15.8 | 0.0 |
+| Squeeze Breakout | 26.2 | 0.0 | 67.6 | 6.2 |
+| VWAP Pullback | 18.2 | 0.0 | 62.8 | 19.0 |
 
 `stop` = protective stop hit · `target` = fixed take-profit hit ·
 `signal` = strategy's own exit rule · `eod` = flattened at the session cutoff.

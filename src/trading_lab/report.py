@@ -25,6 +25,7 @@ STRATEGIES = {
     "news_momentum": ("News Momentum", "#008300"),
     "squeeze_breakout": ("Squeeze Breakout", "#4a3aa7"),
     "high_break_trail": ("High-Break ATR Trail", "#e34948"),
+    "ar_forecast": ("AR Forecast", "#0e7c86"),
 }
 
 SURFACE = "#fcfcfb"
