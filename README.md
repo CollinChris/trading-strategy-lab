@@ -149,6 +149,12 @@ to be on.
 | `paper-flatten` | 19:40 & 20:40 Mon–Fri | 3:40pm ET (+ EST-season backup) | 3:40am / 4:40am | Closes every open paper position and cancels open orders — day-trading discipline, nothing held overnight. |
 | `paper-journal` | 21:30 Mon–Fri (+ 23:30 & next-day 14:30 retry slots) | 5:30pm ET | 5:30am | Pulls the day's actual fills from Alpaca, computes the market conditions at each entry, appends rows to `results/paper_journal.csv`, and **commits the file back to the repo**. |
 
+GitHub's cron is best-effort (runs fired hours late or not at all during the
+2026-08-26/27 Actions incidents), so the primary trigger is an external
+scheduler calling `workflow_dispatch` — see [docs/external-cron.md](docs/external-cron.md).
+The cron blocks above remain as a free fallback; every job is idempotent, so
+duplicate runs are harmless.
+
 So each weekday: up to ~42 scans, one flatten, one journal commit. GitHub's
 cron is UTC and ignores US daylight saving — **in November, shift the scan and
 journal hours in `.github/workflows/*.yml` by +1** (the flatten workflow
