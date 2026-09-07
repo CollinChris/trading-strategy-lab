@@ -84,7 +84,15 @@ class ArForecast(Strategy):
         if len(y) < self.min_obs:
             return None
         a = np.column_stack([np.ones(len(x)), x])
-        beta, *_ = np.linalg.lstsq(a, y, rcond=None)
+        # Normal equations with a whisper of ridge: same fit as lstsq on
+        # full-rank data, well-defined on degenerate (e.g. flat) days, and an
+        # order of magnitude faster — this runs on every bar.
+        ata = a.T @ a
+        ata.flat[:: ata.shape[0] + 1] += 1e-8
+        try:
+            beta = np.linalg.solve(ata, a.T @ y)
+        except np.linalg.LinAlgError:
+            return None
         pred = float(np.concatenate(([1.0], today[-self.lags :])) @ beta)
         if not np.isfinite(pred):
             return None

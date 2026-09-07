@@ -84,7 +84,9 @@ GRIDS: dict[str, tuple[type[Strategy], list[dict[str, Any]]]] = {
     ),
     "ar_forecast": (
         ArForecast,
-        _grid(lags=[6, 12], horizon=[3, 6, 12], threshold=[0.001, 0.0015, 0.002]),
+        # 12 sets, not 18: the middle threshold never separated from its
+        # neighbours and the grid is the tune's runtime hotspot.
+        _grid(lags=[6, 12], horizon=[3, 6, 12], threshold=[0.001, 0.002]),
     ),
 }
 
@@ -176,7 +178,35 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
         )
 
     path = _write_report(rows, cfg, cut, len(train), len(test), out_dir)
+    _append_history(rows, out_dir)
     return path
+
+
+def _append_history(rows, out_dir: Path) -> None:
+    """One row per strategy per run in tuning_history.csv — TUNING.md is
+    overwritten weekly, so this is where week-over-week parameter stability
+    (or churn — a result in itself) becomes visible. Re-runs on the same
+    date replace that date's rows, so a retried workflow stays clean."""
+    hist_path = out_dir / "tuning_history.csv"
+    today = market_today().isoformat()
+    fresh = pd.DataFrame(
+        [
+            {
+                "run_date": today,
+                "strategy": r["strategy"],
+                "best_params": str(r["params"]),
+                "train_expectancy": r["train"]["expectancy"] if r["train"] else None,
+                "test_expectancy": r["test"]["expectancy"] if r["test"] else None,
+                "default_test_expectancy": r["default_test"]["expectancy"],
+                "test_trades": r["test"]["trades"] if r["test"] else r["default_test"]["trades"],
+            }
+            for r in rows
+        ]
+    )
+    if hist_path.exists():
+        old = pd.read_csv(hist_path)
+        fresh = pd.concat([old[old["run_date"] != today], fresh], ignore_index=True)
+    fresh.to_csv(hist_path, index=False)
 
 
 def _write_report(
