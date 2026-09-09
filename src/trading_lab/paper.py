@@ -31,6 +31,17 @@ from .strategies import all_strategies
 
 STATE_PATH = Path("data/paper_state.json")
 JOURNAL_PATH = Path("results/paper_journal.csv")
+TUNED_PATH = Path("results/tuned_params.json")
+
+
+def _load_tuned() -> dict[str, dict]:
+    """Saturday's tuned parameters — traded as `<name>_tuned` variants
+    alongside the defaults. Absent or unreadable file just means no variants."""
+    try:
+        payload = json.loads(TUNED_PATH.read_text())
+        return {name: entry["params"] for name, entry in payload["strategies"].items()}
+    except (OSError, KeyError, ValueError):
+        return {}
 
 
 def _client():
@@ -74,6 +85,7 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
 
     bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d", on_missing="skip")
     news = load_news(cfg.symbols, cfg.interval, period="3d")
+    tuned = _load_tuned()
     client = None if dry_run else _client()
     placed = 0
 
@@ -87,7 +99,7 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
             continue
         last_price = float(day["close"].iloc[-1])
 
-        for strategy in all_strategies(news):
+        for strategy in all_strategies(news, tuned=tuned):
             tag = f"{strategy.name}--{symbol}--{today}"
             if tag in done_today:
                 continue

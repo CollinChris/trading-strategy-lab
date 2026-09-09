@@ -251,6 +251,8 @@ filters learned from the journal.
       strategy state in engine and paper scanner, five time-series entry features in
       the tuning dataset, and opt-in volatility-scaled risk (`--vol-sizing`: ATR stops
       + fixed dollar risk — cuts max drawdowns ~2-3x in the 60-day baseline)
+- [x] v0.5 — live A/B of the weekly tune: Saturday's best parameters trade as
+      `<name>_tuned` variants alongside the nine defaults, refreshed each tune run
 - [ ] Walk-forward validation (multiple train/test folds instead of one split)
 - [ ] Regime filters learned from the journal (trade only where the conditions data says the strategy wins)
 - [ ] Longer history + true gappers via Alpaca's historical minute data

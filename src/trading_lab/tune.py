@@ -129,6 +129,7 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
     )
 
     rows = []
+    tuned_out: dict[str, dict] = {}
     for name, (cls, grid) in GRIDS.items():
         label = STRATEGIES[name][0]
         # news_momentum needs the headline index injected alongside its params
@@ -162,6 +163,11 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
         train_stats = _stats(run_on(bars, _factory(cls, {**best_params, **extra}), cfg, train))
         test_stats = _stats(run_on(bars, _factory(cls, {**best_params, **extra}), cfg, test))
         default_test = _stats(run_on(bars, _factory(cls, extra), cfg, test))
+        tuned_out[name] = {
+            "params": best_params,
+            "train_expectancy": round(train_stats["expectancy"], 2),
+            "test_expectancy": round(test_stats["expectancy"], 2),
+        }
         rows.append(
             {
                 "strategy": label,
@@ -179,7 +185,18 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
 
     path = _write_report(rows, cfg, cut, len(train), len(test), out_dir)
     _append_history(rows, out_dir)
+    _write_tuned_params(tuned_out, out_dir)
     return path
+
+
+def _write_tuned_params(tuned: dict[str, dict], out_dir: Path) -> None:
+    """results/tuned_params.json — consumed by the paper scanner, which trades
+    each entry as a `<name>_tuned` variant ALONGSIDE the defaults. Overwritten
+    every tune run, so the live A/B always tests the freshest parameters."""
+    import json
+
+    payload = {"generated": market_today().isoformat(), "strategies": tuned}
+    (out_dir / "tuned_params.json").write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def _append_history(rows, out_dir: Path) -> None:

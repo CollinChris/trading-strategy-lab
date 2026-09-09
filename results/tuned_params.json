@@ -1,0 +1,74 @@
+{
+  "generated": "2026-09-08",
+  "strategies": {
+    "orb": {
+      "params": {
+        "range_bars": 6,
+        "target_r": 1.5,
+        "stop_at_mid": false
+      },
+      "train_expectancy": 5.95,
+      "test_expectancy": 3.56
+    },
+    "vwap_pullback": {
+      "params": {
+        "target_r": 3.0,
+        "stop_buffer": 0.995
+      },
+      "train_expectancy": -7.55,
+      "test_expectancy": -25.4
+    },
+    "ema_crossover": {
+      "params": {
+        "fast": 5,
+        "slow": 13,
+        "stop_bars": 10
+      },
+      "train_expectancy": 0.18,
+      "test_expectancy": -23.44
+    },
+    "rsi2_reversion": {
+      "params": {
+        "entry_level": 15.0,
+        "exit_level": 70.0,
+        "stop_pct": 0.005
+      },
+      "train_expectancy": -9.03,
+      "test_expectancy": -10.9
+    },
+    "news_momentum": {
+      "params": {
+        "window_min": 60,
+        "vol_mult": 1.5,
+        "target_r": 3.0
+      },
+      "train_expectancy": 7.95,
+      "test_expectancy": -10.86
+    },
+    "squeeze_breakout": {
+      "params": {
+        "bw_lookback": 6,
+        "target_r": 1.5
+      },
+      "train_expectancy": -9.82,
+      "test_expectancy": -34.11
+    },
+    "high_break_trail": {
+      "params": {
+        "window_bars": 6,
+        "trail_atr_mult": 1.5
+      },
+      "train_expectancy": 6.69,
+      "test_expectancy": 9.11
+    },
+    "ar_forecast": {
+      "params": {
+        "lags": 12,
+        "horizon": 12,
+        "threshold": 0.002
+      },
+      "train_expectancy": 0.09,
+      "test_expectancy": -9.45
+    }
+  }
+}
