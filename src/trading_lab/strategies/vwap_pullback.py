@@ -38,14 +38,28 @@ class VwapPullback(Strategy):
             return None
         vwap_prev = float(self.vwap.iloc[i - 1])
         vwap_now = float(self.vwap.iloc[i])
+        day_open = float(self.day["open"].iloc[0])
+        close = float(self.day["close"].iloc[i])
+
         touched = float(self.day["low"].iloc[i - 1]) <= vwap_prev * (1 + self.touch_tolerance)
         held = float(self.day["close"].iloc[i - 1]) >= vwap_prev * (1 - self.touch_tolerance)
-        bounced = float(self.day["close"].iloc[i]) > float(self.day["high"].iloc[i - 1])
-        green_day = float(self.day["close"].iloc[i]) > float(self.day["open"].iloc[0])
-        if touched and held and bounced and green_day:
+        bounced = close > float(self.day["high"].iloc[i - 1])
+        if touched and held and bounced and close > day_open:
             return EntrySignal(
                 reason=f"bounce off session VWAP {vwap_now:.2f}",
                 stop_price=vwap_now * self.stop_buffer,
                 target_r=self.target_r,
+            )
+
+        # Mirror: red day, rally tags VWAP from below and gets rejected.
+        tagged = float(self.day["high"].iloc[i - 1]) >= vwap_prev * (1 - self.touch_tolerance)
+        held_below = float(self.day["close"].iloc[i - 1]) <= vwap_prev * (1 + self.touch_tolerance)
+        rejected = close < float(self.day["low"].iloc[i - 1])
+        if tagged and held_below and rejected and close < day_open:
+            return EntrySignal(
+                reason=f"rejection at session VWAP {vwap_now:.2f}",
+                stop_price=vwap_now / self.stop_buffer,
+                target_r=self.target_r,
+                side="short",
             )
         return None

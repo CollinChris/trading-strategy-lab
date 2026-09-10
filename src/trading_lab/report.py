@@ -106,12 +106,18 @@ def write_report(
     exits = exits.reset_index(names="strategy")
 
     start, end = trades["date"].min(), trades["date"].max()
+    if "side" in trades.columns:
+        n_long = int((trades["side"] == "long").sum())
+        n_short = int((trades["side"] == "short").sum())
+        mix = f"**{n_long} long / {n_short} short**"
+    else:
+        mix = "long-only"
     body = f"""# Backtest results
 
 Generated {market_today().isoformat()} · window **{start} → {end}** ·
 symbols **{", ".join(cfg.symbols)}** · bars **{cfg.interval}** ·
 **${cfg.notional_per_trade:,.0f}** per trade · slippage **{cfg.slippage_bps:.0f} bps/side** ·
-long-only, everything flat by {cfg.eod_cutoff} ET.
+{mix}, everything flat by {cfg.eod_cutoff} ET.
 
 ## Ranking (by win rate)
 

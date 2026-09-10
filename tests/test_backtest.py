@@ -152,7 +152,8 @@ def test_position_size_modes():
     cfg = Config(vol_sizing=True, risk_per_trade=100.0)
     assert position_size(100.0, 98.5, cfg) == 66  # $100 risk / $1.50 to the stop
     assert position_size(100.0, 99.99, cfg) == 100  # tight stop capped by notional
-    assert position_size(100.0, 101.0, cfg) == 0  # stop above entry: no trade
+    assert position_size(100.0, 101.5, cfg) == 66  # short: risk is |entry - stop|
+    assert position_size(100.0, 100.0, cfg) == 0  # zero risk: no trade
 
 
 def test_vol_sizing_uses_atr_stop(flat_day):

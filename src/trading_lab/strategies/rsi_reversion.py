@@ -31,15 +31,28 @@ class RsiReversion(Strategy):
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < 5:
             return None
-        dip = float(self.rsi2.iloc[i]) < self.entry_level
-        uptrend = float(self.day["close"].iloc[i]) > float(self.vwap.iloc[i])
-        if dip and uptrend:
+        rsi_now = float(self.rsi2.iloc[i])
+        above_vwap = float(self.day["close"].iloc[i]) > float(self.vwap.iloc[i])
+        if rsi_now < self.entry_level and above_vwap:
+            self._side = 1
             return EntrySignal(
-                reason=f"RSI(2)={float(self.rsi2.iloc[i]):.0f} dip above VWAP",
+                reason=f"RSI(2)={rsi_now:.0f} dip above VWAP",
                 stop_pct=self.stop_pct,
                 target_r=None,
+            )
+        # Mirror: overbought rip against an intact downtrend — short the pop.
+        if rsi_now > 100.0 - self.entry_level and not above_vwap:
+            self._side = -1
+            return EntrySignal(
+                reason=f"RSI(2)={rsi_now:.0f} rip below VWAP",
+                stop_pct=self.stop_pct,
+                target_r=None,
+                side="short",
             )
         return None
 
     def exit_signal(self, i: int) -> bool:
-        return float(self.rsi2.iloc[i]) > self.exit_level
+        rsi_now = float(self.rsi2.iloc[i])
+        if getattr(self, "_side", 1) == 1:
+            return rsi_now > self.exit_level
+        return rsi_now < 100.0 - self.exit_level

@@ -82,7 +82,7 @@ shows **positive out-of-sample expectancy**. That gate is currently unmet.
 | **Squeeze Breakout** | Volatility expansion | Bollinger bandwidth at its tightest of the last hour, then first close above the upper band; stop = middle band; 2R target |
 | **High-Break ATR Trail** | Momentum, trailing exit | Break of the first-hour high above VWAP; no fixed target — stop trails the high by 2×ATR so winners run |
 
-All long-only, max 1–3 trades per symbol per day, everything flat by 15:55 ET.
+Each trades both directions (the momentum breakouts short the mirror breakdown below VWAP; the mean-reversion strategies short overbought rips), max 1–3 trades per symbol per day, everything flat by 15:55 ET.
 
 ## How it works
 
@@ -238,8 +238,8 @@ filters learned from the journal.
 - **v0.1 is intentionally untuned.** These are the textbook rules as commonly
   taught, not optimized parameters — the next milestone is honest tuning with
   in-sample/out-of-sample splits, so the baseline had to be recorded first.
-- Long-only; no commissions (slippage only); intra-bar fills approximated from
-  bar ranges; every position force-closed by 15:55 ET.
+- Long and short; no commissions (slippage only); intra-bar fills approximated
+  from bar ranges; every position force-closed by 15:55 ET.
 
 ## Roadmap
 
@@ -253,6 +253,8 @@ filters learned from the journal.
       + fixed dollar risk — cuts max drawdowns ~2-3x in the 60-day baseline)
 - [x] v0.5 — live A/B of the weekly tune: Saturday's best parameters trade as
       `<name>_tuned` variants alongside the nine defaults, refreshed each tune run
+- [x] v0.6 — long **and** short: every strategy trades its mirror setup, signed
+      P&L, ATR/percent stops flip sides, Alpaca SELL-short brackets in paper
 - [ ] Walk-forward validation (multiple train/test folds instead of one split)
 - [ ] Regime filters learned from the journal (trade only where the conditions data says the strategy wins)
 - [ ] Longer history + true gappers via Alpaca's historical minute data

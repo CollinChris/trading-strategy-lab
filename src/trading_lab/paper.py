@@ -114,23 +114,26 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
             if sig is None:
                 continue
 
+            d = sig.direction  # +1 long, -1 short
             stop = (
                 sig.stop_price
                 if sig.stop_price is not None
-                else last_price * (1 - (sig.stop_pct or 0.01))
+                else last_price * (1 - d * (sig.stop_pct or 0.01))
             )
             if cfg.vol_sizing and sig.stop_price is None:
-                stop = last_price - cfg.stop_atr_mult * float(atr(day).iloc[-1])
-            if stop >= last_price:
+                stop = last_price - d * cfg.stop_atr_mult * float(atr(day).iloc[-1])
+            if d * (last_price - stop) <= 0:  # stop on the wrong side of entry
                 continue
             qty = position_size(last_price, stop, cfg)
             if qty < 1:
                 continue
-            target = last_price + sig.target_r * (last_price - stop) if sig.target_r else None
+            target = (
+                last_price + d * sig.target_r * abs(last_price - stop) if sig.target_r else None
+            )
 
             line = (
-                f"{strategy.name:15s} BUY {qty} {symbol} ~{last_price:.2f} "
-                f"stop {stop:.2f}"
+                f"{strategy.name:15s} {'BUY' if d == 1 else 'SELL SHORT'} {qty} {symbol} "
+                f"~{last_price:.2f} stop {stop:.2f}"
                 + (f" target {target:.2f}" if target else " (no target)")
                 + f" — {sig.reason}"
             )
@@ -138,7 +141,7 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
                 print(f"[dry-run] {line}")
             else:
                 try:
-                    _submit(client, symbol, qty, stop, target, tag)
+                    _submit(client, symbol, qty, stop, target, tag, sig.side)
                 except Exception as exc:  # noqa: BLE001 — one bad order must not stop the scan
                     # Deterministic client_order_id doubles as the dedup key on
                     # stateless runners: Alpaca rejects a reused id.
@@ -158,14 +161,16 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     print(f"Scan complete — {placed} order(s) submitted." if not dry_run else "Dry run complete.")
 
 
-def _submit(client, symbol: str, qty: int, stop: float, target: float | None, tag: str) -> None:
+def _submit(
+    client, symbol: str, qty: int, stop: float, target: float | None, tag: str, side: str = "long"
+) -> None:
     from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
     from alpaca.trading.requests import MarketOrderRequest, StopLossRequest, TakeProfitRequest
 
     request = MarketOrderRequest(
         symbol=symbol,
         qty=qty,
-        side=OrderSide.BUY,
+        side=OrderSide.BUY if side == "long" else OrderSide.SELL,
         time_in_force=TimeInForce.DAY,
         order_class=OrderClass.BRACKET if target else OrderClass.OTO,
         stop_loss=StopLossRequest(stop_price=round(stop, 2)),
@@ -242,11 +247,15 @@ def journal(cfg: Config) -> None:
         open_already = set(ids[existing["exit_reason"] == "open"])
         already = set(ids) - open_already
 
+    # Non-ours fills from --flatten / close_all_positions: sells close longs,
+    # buys cover shorts.
     flatten_sells: dict[str, list] = {}
+    flatten_buys: dict[str, list] = {}
     for o in orders:
         ours = o.client_order_id and "--" in str(o.client_order_id)
-        if not ours and str(o.side) == "OrderSide.SELL" and o.filled_at is not None:
-            flatten_sells.setdefault(o.symbol, []).append(o)
+        if not ours and o.filled_at is not None:
+            bucket = flatten_sells if "SELL" in str(o.side).upper() else flatten_buys
+            bucket.setdefault(o.symbol, []).append(o)
 
     rows = []
     for o in orders:
@@ -258,6 +267,8 @@ def journal(cfg: Config) -> None:
         entry_time = pd.Timestamp(o.filled_at).tz_convert(MARKET_TZ)
         entry_date = entry_time.date()
         qty = int(float(o.filled_qty))
+        side = "short" if "SELL" in str(o.side).upper() else "long"
+        d = -1 if side == "short" else 1
 
         exit_price, exit_time, exit_reason = None, None, "open"
         for leg in o.legs or []:
@@ -266,13 +277,15 @@ def journal(cfg: Config) -> None:
                 exit_time = pd.Timestamp(leg.filled_at).tz_convert(MARKET_TZ)
                 exit_reason = "stop" if "stop" in str(leg.type).lower() else "target"
         if exit_price is None:
-            # Earliest sell fill after the entry: an overnight hold closes at
-            # the next open, before any later same-symbol trade that day.
-            sells = [s for s in flatten_sells.get(o.symbol, []) if s.filled_at > o.filled_at]
-            if sells:
-                sell = min(sells, key=lambda s: s.filled_at)
-                exit_price = float(sell.filled_avg_price)
-                exit_time = pd.Timestamp(sell.filled_at).tz_convert(MARKET_TZ)
+            # Earliest flatten fill after the entry (sell for longs, buy-to-
+            # cover for shorts): an overnight hold closes at the next open,
+            # before any later same-symbol trade that day.
+            closers = flatten_sells if d == 1 else flatten_buys
+            fills = [s for s in closers.get(o.symbol, []) if s.filled_at > o.filled_at]
+            if fills:
+                fill = min(fills, key=lambda s: s.filled_at)
+                exit_price = float(fill.filled_avg_price)
+                exit_time = pd.Timestamp(fill.filled_at).tz_convert(MARKET_TZ)
                 exit_reason = "eod"
         if exit_price is None and tag in open_already:
             continue  # still open and already journaled as such — nothing new
@@ -302,12 +315,13 @@ def journal(cfg: Config) -> None:
                 "strategy": strategy_name,
                 "symbol": o.symbol,
                 "qty": qty,
+                "side": side,
                 "entry_time": entry_time,
                 "entry_price": entry_price,
                 "exit_time": exit_time,
                 "exit_price": exit_price,
                 "exit_reason": exit_reason,
-                "pnl": round((exit_price - entry_price) * qty, 2) if exit_price else None,
+                "pnl": round((exit_price - entry_price) * qty * d, 2) if exit_price else None,
                 **conditions,
             }
         )
@@ -321,6 +335,9 @@ def journal(cfg: Config) -> None:
         # A re-visited trade replaces its open placeholder row.
         kept = existing[~existing["client_order_id"].astype(str).isin(set(frame["client_order_id"]))]
         frame = pd.concat([kept, frame], ignore_index=True)
+    if "side" in frame.columns:
+        # Rows journaled before the short side existed were all longs.
+        frame["side"] = frame["side"].fillna("long")
     JOURNAL_PATH.parent.mkdir(exist_ok=True)
     frame.to_csv(JOURNAL_PATH, index=False)
     print(f"Journaled {len(rows)} trade(s), {updated} exit update(s) → {JOURNAL_PATH}")

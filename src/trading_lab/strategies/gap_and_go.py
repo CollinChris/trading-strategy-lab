@@ -32,20 +32,30 @@ class GapAndGo(Strategy):
             self.gap_pct = 0.0
         else:
             self.gap_pct = (float(day["open"].iloc[0]) / prior_close - 1.0) * 100.0
-        self.active = self.gap_pct >= self.min_gap_pct
+        self.active_long = self.gap_pct >= self.min_gap_pct
+        self.active_short = self.gap_pct <= -self.min_gap_pct  # gap-down continuation
         self.opening_high = float(day["high"].iloc[0])
         self.opening_low = float(day["low"].iloc[0])
 
     def entry_signal(self, i: int) -> EntrySignal | None:
-        if not self.active or i < 1 or i > self.entry_window_bars:
+        if not (self.active_long or self.active_short) or i < 1 or i > self.entry_window_bars:
             return None
         close = float(self.day["close"].iloc[i])
         volume = float(self.day["volume"].iloc[i])
         avg_volume = float(self.day["volume"].iloc[:i].mean())
-        if close > self.opening_high and volume > 1.2 * avg_volume:
+        if volume <= 1.2 * avg_volume:
+            return None
+        if self.active_long and close > self.opening_high:
             return EntrySignal(
                 reason=f"gap {self.gap_pct:.1f}%, break of opening high {self.opening_high:.2f}",
                 stop_price=self.opening_low,
                 target_r=self.target_r,
+            )
+        if self.active_short and close < self.opening_low:
+            return EntrySignal(
+                reason=f"gap {self.gap_pct:.1f}%, break of opening low {self.opening_low:.2f}",
+                stop_price=self.opening_high,
+                target_r=self.target_r,
+                side="short",
             )
         return None

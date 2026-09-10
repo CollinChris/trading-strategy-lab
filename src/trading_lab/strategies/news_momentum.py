@@ -49,15 +49,24 @@ class NewsMomentum(Strategy):
         if not fresh:
             return None
         close = float(self.day["close"].iloc[i])
-        breakout = close > float(self.day["high"].iloc[i - 1])
         avg_vol = float(self.day["volume"].iloc[:i].mean())
         confirmed_vol = float(self.day["volume"].iloc[i]) > self.vol_mult * avg_vol
+        if not confirmed_vol:
+            return None
         above_vwap = close > float(self.vwap.iloc[i])
-        if breakout and confirmed_vol and above_vwap:
+        if close > float(self.day["high"].iloc[i - 1]) and above_vwap:
             stop = float(self.day["low"].iloc[i - 2 : i + 1].min())
             return EntrySignal(
                 reason=f"fresh headline <{self.window_min}m + breakout on volume",
                 stop_price=stop,
                 target_r=self.target_r,
+            )
+        if close < float(self.day["low"].iloc[i - 1]) and not above_vwap:
+            stop = float(self.day["high"].iloc[i - 2 : i + 1].max())
+            return EntrySignal(
+                reason=f"fresh headline <{self.window_min}m + breakdown on volume",
+                stop_price=stop,
+                target_r=self.target_r,
+                side="short",
             )
         return None

@@ -39,13 +39,21 @@ class SqueezeBreakout(Strategy):
         if window.isna().any():
             return None
         was_squeezed = float(self.bandwidth.iloc[i - 1]) <= float(window.min()) * 1.05
+        if not was_squeezed:
+            return None
         close = float(self.day["close"].iloc[i])
-        breakout = close > float(self.upper.iloc[i])
         above_vwap = close > float(self.vwap.iloc[i])
-        if was_squeezed and breakout and above_vwap:
+        if close > float(self.upper.iloc[i]) and above_vwap:
             return EntrySignal(
                 reason=f"squeeze breakout above upper band {float(self.upper.iloc[i]):.2f}",
                 stop_price=float(self.mid.iloc[i]),
                 target_r=self.target_r,
+            )
+        if close < float(self.lower.iloc[i]) and not above_vwap:
+            return EntrySignal(
+                reason=f"squeeze breakdown below lower band {float(self.lower.iloc[i]):.2f}",
+                stop_price=float(self.mid.iloc[i]),
+                target_r=self.target_r,
+                side="short",
             )
         return None

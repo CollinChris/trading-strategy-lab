@@ -38,11 +38,18 @@ class OpeningRangeBreakout(Strategy):
         if i < self.range_bars or i > self.entry_window_bars:
             return None
         close = float(self.day["close"].iloc[i])
+        mid = (self.or_high + self.or_low) / 2.0
         if close > self.or_high:
-            stop = (self.or_high + self.or_low) / 2.0 if self.stop_at_mid else self.or_low
             return EntrySignal(
                 reason=f"break of opening range high {self.or_high:.2f}",
-                stop_price=stop,
+                stop_price=mid if self.stop_at_mid else self.or_low,
                 target_r=self.target_r,
+            )
+        if close < self.or_low:
+            return EntrySignal(
+                reason=f"break of opening range low {self.or_low:.2f}",
+                stop_price=mid if self.stop_at_mid else self.or_high,
+                target_r=self.target_r,
+                side="short",
             )
         return None

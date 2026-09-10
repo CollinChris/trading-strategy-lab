@@ -101,17 +101,19 @@ class ArForecast(Strategy):
 
     def entry_signal(self, i: int) -> EntrySignal | None:
         pred = self._forecast(i)
-        if pred is not None and pred > self.threshold:
-            self._entry_bar = i
-            return EntrySignal(
-                reason=f"AR({self.lags}) forecasts {pred * 100:+.2f}% over {self.horizon} bars",
-                stop_pct=self.stop_pct,
-                target_r=None,
-            )
-        return None
+        if pred is None or abs(pred) <= self.threshold:
+            return None
+        self._entry_bar = i
+        self._side = 1 if pred > 0 else -1
+        return EntrySignal(
+            reason=f"AR({self.lags}) forecasts {pred * 100:+.2f}% over {self.horizon} bars",
+            stop_pct=self.stop_pct,
+            target_r=None,
+            side="long" if pred > 0 else "short",
+        )
 
     def exit_signal(self, i: int) -> bool:
         if self._entry_bar is not None and i - self._entry_bar >= self.horizon:
             return True
         pred = self._forecast(i)
-        return pred is not None and pred < 0.0
+        return pred is not None and pred * getattr(self, "_side", 1) < 0.0

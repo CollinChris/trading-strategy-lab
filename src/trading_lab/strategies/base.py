@@ -12,7 +12,10 @@ Contract (enforced by the engine, relied on for zero lookahead):
 - exit_signal(i, ...) likewise fills at bar i+1's open. Stops and targets are
   monitored intra-bar by the engine itself.
 
-All strategies are long-only in this MVP (see README).
+Signals carry a side. For a short: the stop sits ABOVE entry (stop_pct means
+entry * (1 + pct)), the target sits below at N x risk, and a trailing stop
+ratchets DOWN to (low + trail_dist). The engine and the paper executor own
+those mechanics; strategies just say which side and where the stop is.
 """
 
 from __future__ import annotations
@@ -27,9 +30,14 @@ import pandas as pd
 class EntrySignal:
     reason: str
     stop_price: float | None = None  # absolute stop, or...
-    stop_pct: float | None = None  # ...fractional stop below entry (e.g. 0.01)
+    stop_pct: float | None = None  # ...fractional stop away from entry (e.g. 0.01)
     target_r: float | None = None  # take-profit at N x risk; None = no fixed target
-    trail_dist: float | None = None  # trailing stop: ratchet stop to (high - trail_dist)
+    trail_dist: float | None = None  # trailing stop distance (from highs long, lows short)
+    side: str = "long"  # "long" or "short"
+
+    @property
+    def direction(self) -> int:
+        return -1 if self.side == "short" else 1
 
 
 class Strategy(ABC):

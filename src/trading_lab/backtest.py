@@ -37,6 +37,7 @@ class _Open:
     trail_dist: float | None
     reason: str
     conditions: dict
+    direction: int = 1  # +1 long, -1 short
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,7 @@ class Trade:
     exit_time: pd.Timestamp
     exit_price: float
     qty: int
+    side: str
     pnl: float
     pnl_pct: float
     hold_minutes: float
@@ -134,11 +136,11 @@ def _fill_price(price: float, slippage_bps: float, side: str) -> float:
 
 
 def position_size(entry: float, stop: float, cfg: Config) -> int:
-    """Shares to buy. Default: fixed notional. vol_sizing: fixed dollar risk to
-    the stop (risk parity across volatility regimes), still notional-capped."""
+    """Shares to trade (either side). Default: fixed notional. vol_sizing:
+    fixed dollar risk to the stop (risk parity), still notional-capped."""
     if not cfg.vol_sizing:
         return int(cfg.notional_per_trade // entry)
-    risk = entry - stop
+    risk = abs(entry - stop)
     if risk <= 0:
         return 0
     return int(min(cfg.risk_per_trade / risk, cfg.notional_per_trade / entry))
@@ -169,7 +171,7 @@ def run_symbol_day(
     last_i = len(day) - 1
 
     def close(pos_: _Open, ts: pd.Timestamp, price: float, why: str) -> None:
-        pnl = (price - pos_.entry_price) * pos_.qty
+        pnl = (price - pos_.entry_price) * pos_.qty * pos_.direction
         trades.append(
             Trade(
                 strategy=strategy.name,
@@ -180,8 +182,9 @@ def run_symbol_day(
                 exit_time=ts,
                 exit_price=round(price, 4),
                 qty=pos_.qty,
+                side="long" if pos_.direction == 1 else "short",
                 pnl=round(pnl, 2),
-                pnl_pct=round((price / pos_.entry_price - 1.0) * 100.0, 4),
+                pnl_pct=round(pos_.direction * (price / pos_.entry_price - 1.0) * 100.0, 4),
                 hold_minutes=(ts - pos_.entry_time).total_seconds() / 60.0,
                 entry_reason=pos_.reason,
                 exit_reason=why,
@@ -198,50 +201,62 @@ def run_symbol_day(
 
         # 1) Dynamic exit signalled on the previous bar fills at this open.
         if pos is not None and pending_exit:
-            close(pos, ts, _fill_price(bar_open, cfg.slippage_bps, "sell"), "signal")
+            exit_side = "sell" if pos.direction == 1 else "buy"
+            close(pos, ts, _fill_price(bar_open, cfg.slippage_bps, exit_side), "signal")
             pos = None
         pending_exit = False
 
         # 2) Entry signalled on the previous bar fills at this open.
         if pos is None and pending_entry is not None:
-            entry = _fill_price(bar_open, cfg.slippage_bps, "buy")
             sig = pending_entry
+            d = sig.direction  # +1 long, -1 short
+            entry = _fill_price(bar_open, cfg.slippage_bps, "buy" if d == 1 else "sell")
             stop = (
                 sig.stop_price
                 if sig.stop_price is not None
-                else entry * (1 - (sig.stop_pct or 0.01))
+                else entry * (1 - d * (sig.stop_pct or 0.01))
             )
             if atr_series is not None and sig.stop_price is None:
                 # ATR from the completed signal bar (i-1) — bar i is still forming.
-                stop = entry - cfg.stop_atr_mult * float(atr_series.iloc[i - 1])
-            if stop < entry:  # skip entries that gap through their own stop
+                stop = entry - d * cfg.stop_atr_mult * float(atr_series.iloc[i - 1])
+            if d * (entry - stop) > 0:  # skip entries that gap through their own stop
                 qty = position_size(entry, stop, cfg)
                 if qty > 0:
-                    target = entry + sig.target_r * (entry - stop) if sig.target_r else None
+                    risk = abs(entry - stop)
+                    target = entry + d * sig.target_r * risk if sig.target_r else None
                     conditions = entry_conditions(day, i, entry, prior_close, vwap, spy_day)
                     pos = _Open(
-                        ts, entry, qty, stop, target, sig.trail_dist, sig.reason, conditions
+                        ts, entry, qty, stop, target, sig.trail_dist, sig.reason, conditions, d
                     )
                     taken += 1
         pending_entry = None
 
         # 3) Intra-bar stop first (conservative), then target; then ratchet any
-        #    trailing stop using this bar's high (applies from the next bar on).
+        #    trailing stop using this bar's extreme (applies from the next bar on).
         if pos is not None:
-            if bar_low <= pos.stop:
-                close(pos, ts, _fill_price(pos.stop, cfg.slippage_bps, "sell"), "stop")
+            exit_side = "sell" if pos.direction == 1 else "buy"
+            stop_hit = bar_low <= pos.stop if pos.direction == 1 else bar_high >= pos.stop
+            target_hit = pos.target is not None and (
+                bar_high >= pos.target if pos.direction == 1 else bar_low <= pos.target
+            )
+            if stop_hit:
+                close(pos, ts, _fill_price(pos.stop, cfg.slippage_bps, exit_side), "stop")
                 pos = None
-            elif pos.target is not None and bar_high >= pos.target:
-                close(pos, ts, _fill_price(pos.target, cfg.slippage_bps, "sell"), "target")
+            elif target_hit:
+                close(pos, ts, _fill_price(pos.target, cfg.slippage_bps, exit_side), "target")
                 pos = None
             elif pos.trail_dist is not None:
-                pos.stop = max(pos.stop, bar_high - pos.trail_dist)
+                if pos.direction == 1:
+                    pos.stop = max(pos.stop, bar_high - pos.trail_dist)
+                else:
+                    pos.stop = min(pos.stop, bar_low + pos.trail_dist)
 
         # 4) End of day: flatten and stop trading.
         at_eod = i == last_i or ts.time() >= eod_cutoff
         if at_eod:
             if pos is not None:
-                close(pos, ts, _fill_price(bar_close, cfg.slippage_bps, "sell"), "eod")
+                exit_side = "sell" if pos.direction == 1 else "buy"
+                close(pos, ts, _fill_price(bar_close, cfg.slippage_bps, exit_side), "eod")
                 pos = None
             if ts.time() >= eod_cutoff:
                 break

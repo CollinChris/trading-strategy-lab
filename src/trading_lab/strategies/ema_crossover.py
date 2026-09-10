@@ -31,18 +31,29 @@ class EmaCrossover(Strategy):
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < self.slow_span:
             return None
-        crossed_up = float(self.fast.iloc[i]) > float(self.slow.iloc[i]) and float(
-            self.fast.iloc[i - 1]
-        ) <= float(self.slow.iloc[i - 1])
-        above_vwap = float(self.day["close"].iloc[i]) > float(self.vwap.iloc[i])
-        if crossed_up and above_vwap:
+        fast_now, slow_now = float(self.fast.iloc[i]), float(self.slow.iloc[i])
+        fast_prev, slow_prev = float(self.fast.iloc[i - 1]), float(self.slow.iloc[i - 1])
+        close = float(self.day["close"].iloc[i])
+        vwap_now = float(self.vwap.iloc[i])
+        if fast_now > slow_now and fast_prev <= slow_prev and close > vwap_now:
             stop = float(self.day["low"].iloc[max(0, i - self.stop_bars + 1) : i + 1].min())
+            self._side = 1
             return EntrySignal(
                 reason=f"EMA{self.fast_span}/{self.slow_span} cross up above VWAP",
                 stop_price=stop,
                 target_r=None,
             )
+        if fast_now < slow_now and fast_prev >= slow_prev and close < vwap_now:
+            stop = float(self.day["high"].iloc[max(0, i - self.stop_bars + 1) : i + 1].max())
+            self._side = -1
+            return EntrySignal(
+                reason=f"EMA{self.fast_span}/{self.slow_span} cross down below VWAP",
+                stop_price=stop,
+                target_r=None,
+                side="short",
+            )
         return None
 
     def exit_signal(self, i: int) -> bool:
-        return float(self.fast.iloc[i]) < float(self.slow.iloc[i])
+        diff = float(self.fast.iloc[i]) - float(self.slow.iloc[i])
+        return diff * getattr(self, "_side", 1) < 0  # EMAs crossed back against the position

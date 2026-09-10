@@ -28,20 +28,29 @@ class HighBreakTrail(Strategy):
         self.vwap = session_vwap(day)
         n = min(self.window_bars, len(day))
         self.opening_high = float(day["high"].iloc[:n].max())
+        self.opening_low = float(day["low"].iloc[:n].min())
 
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < self.window_bars:
             return None
         close = float(self.day["close"].iloc[i])
         above_vwap = close > float(self.vwap.iloc[i])
+        dist = self.trail_atr_mult * float(self.atr.iloc[i])
+        if dist <= 0:
+            return None
         if close > self.opening_high and above_vwap:
-            dist = self.trail_atr_mult * float(self.atr.iloc[i])
-            if dist <= 0:
-                return None
             return EntrySignal(
                 reason=f"break of first-hour high {self.opening_high:.2f}, {self.trail_atr_mult}xATR trail",
                 stop_price=close - dist,
                 trail_dist=dist,
                 target_r=None,
+            )
+        if close < self.opening_low and not above_vwap:
+            return EntrySignal(
+                reason=f"break of first-hour low {self.opening_low:.2f}, {self.trail_atr_mult}xATR trail",
+                stop_price=close + dist,
+                trail_dist=dist,
+                target_r=None,
+                side="short",
             )
         return None
