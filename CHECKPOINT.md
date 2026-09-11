@@ -5,7 +5,7 @@ Resume point for future working sessions (human or AI). Read this file, then
 
 ## Where the project stands
 
-**v0.7 built (uncommitted at time of writing — check `git status`).** Since
+**v0.7 shipped (commit c74d665, pushed 2026-09-11).** Since
 v0.3: weekly tune workflow + tuning history (v0.4), tuned parameters traded as
 live `<name>_tuned` A/B variants (v0.5), long **and** short on every strategy
 (v0.6), **walk-forward regime filters** (v0.7, `trading-lab regime` →
@@ -67,7 +67,7 @@ tune → backtest → regime and commits all three). Everything below is live:
    tab; journal rows accumulate in `results/paper_journal.csv`.
 2. **Compare paper fills vs backtest assumptions** (slippage, stop behavior)
    once ~50 paper trades exist.
-3. **Commit v0.7/v0.8** if not yet done (`git status`). The live `_regime` path
+3. **Watch the first live night.** The `_regime` path
    has NOT yet been exercised in a real market session (built outside US hours;
    `--dry-run` only reached the entry-window guard). First trading night: check
    the scan logs for `regime filter: hgb_reg fitted …`, `[regime skip]` lines,
