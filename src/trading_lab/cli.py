@@ -1,4 +1,4 @@
-"""Command-line entry point: `trading-lab backtest` and `trading-lab paper`."""
+"""Command-line entry point: `trading-lab backtest|tune|regime|paper|journal`."""
 
 from __future__ import annotations
 
@@ -22,6 +22,24 @@ def main() -> None:
     tn = sub.add_parser("tune", help="grid-search parameters on a train split, validate held-out")
     tn.add_argument("--symbols", nargs="*", default=DEFAULT_SYMBOLS)
     tn.add_argument("--train-frac", type=float, default=0.6)
+
+    rg = sub.add_parser(
+        "regime",
+        help="learn when each strategy wins from the trade journal, validated walk-forward",
+    )
+    rg.add_argument("--trades", default="results/trades.csv")
+    rg.add_argument("--journal", default="results/paper_journal.csv")
+    rg.add_argument(
+        "--min-train", type=int, default=20, help="sessions before the first test block"
+    )
+    rg.add_argument("--block", type=int, default=5, help="sessions per walk-forward test block")
+    rg.add_argument(
+        "--model",
+        nargs="*",
+        default=["hgb_reg", "ridge", "hgb", "logit"],
+        choices=["hgb_reg", "ridge", "hgb", "logit"],
+        help="filters to evaluate (first is the primary in the report)",
+    )
 
     pp = sub.add_parser("paper", help="scan latest bars and place Alpaca paper orders")
     pp.add_argument("--dry-run", action="store_true", help="print orders instead of submitting")
@@ -62,6 +80,20 @@ def main() -> None:
 
         path = tune(Config(symbols=args.symbols), train_frac=args.train_frac)
         print(f"\nTuning report → {path}")
+
+    elif args.command == "regime":
+        from pathlib import Path
+
+        from .regime import run_regime
+
+        path = run_regime(
+            trades_path=Path(args.trades),
+            journal_path=Path(args.journal),
+            min_train=args.min_train,
+            block=args.block,
+            kinds=tuple(args.model),
+        )
+        print(f"\nRegime report → {path}")
 
     elif args.command == "paper":
         from . import paper

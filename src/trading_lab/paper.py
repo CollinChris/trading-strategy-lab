@@ -23,10 +23,11 @@ from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 
-from .backtest import position_size
+from .backtest import entry_conditions, position_size
 from .config import Config
 from .data import MARKET_TZ, load_bars, load_news, market_today, split_days
-from .indicators import atr
+from .indicators import atr, session_vwap
+from .regime import RegimeFilter, load_filter
 from .strategies import all_strategies
 
 STATE_PATH = Path("data/paper_state.json")
@@ -42,6 +43,23 @@ def _load_tuned() -> dict[str, dict]:
         return {name: entry["params"] for name, entry in payload["strategies"].items()}
     except (OSError, KeyError, ValueError):
         return {}
+
+
+def _load_regime() -> RegimeFilter | None:
+    """The walk-forward-validated regime filter (results/regime_model.joblib),
+    traded as `<name>_regime` variants: the base strategy's signal, taken only
+    when the filter's predicted EV for the live conditions is positive. No
+    file → no variants, base strategies unaffected."""
+    loaded = load_filter()
+    if loaded is None:
+        return None
+    flt, meta = loaded
+    print(
+        f"regime filter: {meta.get('kind')} fitted {meta.get('generated')} on "
+        f"{meta.get('sessions')} sessions (OOS {meta.get('oos_exp_all'):+.2f} → "
+        f"{meta.get('oos_exp_kept'):+.2f}/trade)"
+    )
+    return flt
 
 
 def _client():
@@ -86,6 +104,14 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d", on_missing="skip")
     news = load_news(cfg.symbols, cfg.interval, period="3d")
     tuned = _load_tuned()
+    regime = _load_regime()
+    spy_today = None
+    if regime is not None:
+        # SPY context feeds the filter's mkt_spy_change_pct; best-effort.
+        spy = load_bars(["SPY"], cfg.interval, period="5d", on_missing="skip").get("SPY")
+        if spy is not None and not spy.empty:
+            spy_date, spy_day, _ = split_days(spy)[-1]
+            spy_today = spy_day if spy_date.isoformat() == today else None
     client = None if dry_run else _client()
     placed = 0
 
@@ -98,6 +124,7 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
         if len(day) < 2:
             continue
         last_price = float(day["close"].iloc[-1])
+        vwap = session_vwap(day) if regime is not None else None
 
         for strategy in all_strategies(news, tuned=tuned):
             tag = f"{strategy.name}--{symbol}--{today}"
@@ -137,22 +164,45 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
                 + (f" target {target:.2f}" if target else " (no target)")
                 + f" — {sig.reason}"
             )
-            if dry_run:
-                print(f"[dry-run] {line}")
-            else:
+            # The regime variant: same signal, second order, only when the
+            # filter's predicted EV for right-now conditions is positive.
+            # Tuned variants don't get one — keep the live A/B two-way.
+            orders = [(strategy.name, tag, line)]
+            if regime is not None and not strategy.name.endswith("_tuned"):
+                conditions = entry_conditions(
+                    day, len(day) - 1, last_price, prior_close, vwap, spy_today
+                )
+                ev = regime.score_signal(strategy.name, sig.side, conditions)
+                if ev > 0:
+                    rname = f"{strategy.name}_regime"
+                    rtag = f"{rname}--{symbol}--{today}"
+                    if rtag not in done_today:
+                        orders.append(
+                            (
+                                rname,
+                                rtag,
+                                f"{rname:15s} [regime EV {ev:+.2f}] " + line.split(" ", 1)[1],
+                            )
+                        )
+                else:
+                    print(f"[regime skip] {strategy.name} {symbol} EV {ev:+.2f}")
+            for name, otag, oline in orders:
+                if dry_run:
+                    print(f"[dry-run] {oline}")
+                    continue
                 try:
-                    _submit(client, symbol, qty, stop, target, tag, sig.side)
+                    _submit(client, symbol, qty, stop, target, otag, sig.side)
                 except Exception as exc:  # noqa: BLE001 — one bad order must not stop the scan
                     # Deterministic client_order_id doubles as the dedup key on
                     # stateless runners: Alpaca rejects a reused id.
                     if "client_order_id" in str(exc) or "unique" in str(exc).lower():
-                        print(f"[already today] {strategy.name} {symbol}")
-                        done_today.append(tag)
+                        print(f"[already today] {name} {symbol}")
+                        done_today.append(otag)
                     else:
-                        print(f"[error] {line}\n        {exc}")
+                        print(f"[error] {oline}\n        {exc}")
                     continue
-                print(f"[submitted] {line}")
-                done_today.append(tag)
+                print(f"[submitted] {oline}")
+                done_today.append(otag)
                 placed += 1
 
     if not dry_run:
@@ -214,10 +264,10 @@ def journal(cfg: Config) -> None:
     from alpaca.trading.enums import QueryOrderStatus
     from alpaca.trading.requests import GetOrdersRequest
 
-    from .backtest import entry_conditions, load_spy_by_date
-    from .indicators import session_vwap
+    from .backtest import load_spy_by_date
 
     client = _client()
+    regime = _load_regime()
     today = market_today()
     day_start = dt.datetime.combine(today, dt.time(0, 0), tzinfo=MARKET_TZ)
     # Look back several days, not just today, so an entry journaled while the
@@ -235,7 +285,7 @@ def journal(cfg: Config) -> None:
     bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d", on_missing="skip")
     try:
         spy_by_date = load_spy_by_date(Config(symbols=cfg.symbols, period="5d"))
-    except Exception as exc:  # noqa: BLE001 — conditions are best-effort; journal the fills regardless
+    except Exception as exc:  # noqa: BLE001 — conditions are best-effort; journal regardless
         print(f"warning: SPY conditions unavailable ({exc})")
         spy_by_date = {}
 
@@ -308,6 +358,13 @@ def journal(cfg: Config) -> None:
                     spy_by_date.get(entry_date),
                 )
 
+        # The filter's verdict at entry on EVERY row (not just `_regime` ones),
+        # so kept-vs-skipped can be compared on the base strategies' real fills.
+        regime_ev = (
+            round(regime.score_signal(strategy_name, side, conditions), 2)
+            if regime is not None and conditions
+            else None
+        )
         rows.append(
             {
                 "client_order_id": tag,
@@ -323,6 +380,7 @@ def journal(cfg: Config) -> None:
                 "exit_reason": exit_reason,
                 "pnl": round((exit_price - entry_price) * qty * d, 2) if exit_price else None,
                 **conditions,
+                "regime_ev": regime_ev,
             }
         )
 
@@ -333,7 +391,9 @@ def journal(cfg: Config) -> None:
     updated = sum(1 for r in rows if r["client_order_id"] in open_already)
     if existing is not None:
         # A re-visited trade replaces its open placeholder row.
-        kept = existing[~existing["client_order_id"].astype(str).isin(set(frame["client_order_id"]))]
+        kept = existing[
+            ~existing["client_order_id"].astype(str).isin(set(frame["client_order_id"]))
+        ]
         frame = pd.concat([kept, frame], ignore_index=True)
     if "side" in frame.columns:
         # Rows journaled before the short side existed were all longs.

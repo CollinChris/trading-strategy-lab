@@ -69,6 +69,58 @@ Full table: [results/TUNING.md](results/TUNING.md).
 **Project rule:** nothing goes to live paper trading until a configuration
 shows **positive out-of-sample expectancy**. That gate is currently unmet.
 
+## Regime filters: does *when* you trade fix it?
+
+Partly — and the way it partly fails is, again, the lesson. Every trade carries a
+market-condition snapshot at entry (gap, session trend slope, VWAP distance,
+relative volume, SPY move, realized vol, ...). `trading-lab regime` trains a
+model on those conditions to predict each trade's expected value and keeps only
+trades with a positive prediction, validated **walk-forward**: the first 20
+sessions are train-only, then every 5-session block is scored by a model that
+saw only the sessions before it (8 folds, 40 out-of-sample sessions, 2,063
+out-of-sample trades). Every filter is also compared against 2,000 random
+subsets of the same size, because dropping trades at random moves expectancy too.
+
+| Filter | OOS trades kept | Exp./trade, all → kept | PF all → kept | Percentile vs random same-size |
+|---|---|---|---|---|
+| Gradient boosting → P&L directly | 295 (14%) | −$13.03 → **−$4.82** | 0.70 → 0.87 | **92nd** |
+| Ridge → P&L directly | 565 (27%) | −$13.03 → −$8.21 | 0.70 → 0.80 | 88th |
+| Logistic → P(win) → EV | 183 (9%) | −$13.03 → −$12.55 | 0.70 → 0.80 | 53rd |
+| Gradient boosting → P(win) → EV | 324 (16%) | −$13.03 → **−$22.96** | 0.70 → 0.62 | **3rd** |
+
+![OOS cumulative P&L with vs without the filter](results/regime_oos.png)
+
+- **The conditions carry real information, but not an edge.** The best filter
+  cuts the out-of-sample loss by almost two-thirds and its predicted-EV
+  quintiles are monotonic (bottom quintile −$20.36/trade, top −$3.52) — yet
+  the top quintile still loses, and the 92nd percentile against random
+  selection is suggestive, not conclusive. Standing aside more often helps; it
+  does not create an edge the entries don't have.
+- **The win-rate trap, rediscovered by a model.** Both P(win) classifiers were
+  mildly predictive out of sample (AUC ≈ 0.55) and the gradient-boosted one
+  still *lost more* than random selection: the trades it rated most likely to
+  win were the ones that won small and lost big. Predicting P&L directly fixed
+  it. Same finding as v0.1, one level of abstraction up.
+- **The filter's main move is to switch strategies off.** Out of sample it kept
+  zero EMA-crossover, news-momentum, or squeeze trades; what it kept of ORB
+  turned +$17.32/trade (PF 1.19, n=31) and AR Forecast went to breakeven. The
+  features it leans on are the session's trend slope signed by trade direction,
+  the overnight gap, and the open→entry move.
+- **Real fills agree in direction, on a tiny sample.** Fitted on backtest
+  sessions before the paper loop started, the filter kept 15 of the 159 real
+  paper trades since 2026-08-24; those 15 averaged +$118.91 against −$25.86
+  for the book. Fifteen trades is a direction check, not a verdict.
+
+One caution the learning curve adds: on a fixed test set (the last 20 sessions)
+the filter is noise when trained on 10–30 sessions and only turns positive at
+40 — a steep curve with no plateau yet. Trades within a session share a tape, so
+the effective sample is closer to 60 sessions than 3,000 trades. More *sessions*
+(Alpaca's minute history) is the lever, not more trades.
+
+Full tables, fold-by-fold results, calibration, and per-strategy in-sample
+rules: [results/REGIME.md](results/REGIME.md). The fitted filter the paper
+scanner trades is `results/regime_model.joblib`.
+
 ## The five strategies
 
 | Strategy | Style | Rule sketch |
@@ -115,7 +167,9 @@ uv run trading-lab backtest                    # writes results/ (table, chart, 
 uv run trading-lab backtest --symbols TSLA AMD # custom universe
 uv run trading-lab tune                        # grid-search params on a train split,
                                                #   validate held-out → results/TUNING.md
-uv run pytest                                  # 15 tests: engine, indicators, signals
+uv run trading-lab regime                      # learn when each strategy wins from the
+                                               #   journal, walk-forward → results/REGIME.md
+uv run pytest                                  # 55 tests: engine, indicators, signals, regime
 ```
 
 ### Paper trading (stage 2)
@@ -135,6 +189,20 @@ The scanner runs once and exits (cron it during US market hours). One paper
 trade per strategy+symbol per day; dynamic-exit strategies run stop-only
 brackets and rely on `--flatten` for the end-of-day exit.
 
+Two kinds of **live A/B variants** trade alongside the nine defaults, each with
+its own `client_order_id` tag so the journal keeps them apart:
+
+- `<name>_tuned` — Saturday's best grid-search parameters (`results/tuned_params.json`).
+- `<name>_regime` — the same signal as the default, but the order is only placed
+  when the regime filter (`results/regime_model.joblib`, see above) predicts a
+  positive expected value for the conditions at that moment. Skips are logged as
+  `[regime skip] <strategy> <symbol> EV -x.xx`. Every journal row, variant or
+  not, also records `regime_ev`, the filter's verdict at entry — so kept-vs-skipped
+  can be compared on the defaults' real fills as well as on the variant's book.
+
+Both variant sets are refreshed by the Saturday workflow; if either file is
+absent the defaults trade unaffected.
+
 ## User guide — the automated loop
 
 Once the repo has `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` as Actions secrets,
@@ -147,7 +215,8 @@ to be on.
 |---|---|---|---|---|
 | `paper-scan` | every 10 min, 13:00–19:59 Mon–Fri | 9:00am–3:59pm ET | 9:00pm–3:59am | Checks the latest completed 5-min bar for all 9 strategies × 6 symbols; fires bracket orders (entry + stop + target) at the paper account. Scans outside the 09:35–15:30 ET entry window exit immediately without trading. |
 | `paper-flatten` | 19:40 & 20:40 Mon–Fri | 3:40pm ET (+ EST-season backup) | 3:40am / 4:40am | Closes every open paper position and cancels open orders — day-trading discipline, nothing held overnight. |
-| `paper-journal` | 21:30 Mon–Fri (+ 23:30 & next-day 14:30 retry slots) | 5:30pm ET | 5:30am | Pulls the day's actual fills from Alpaca, computes the market conditions at each entry, appends rows to `results/paper_journal.csv`, and **commits the file back to the repo**. |
+| `paper-journal` | 21:30 Mon–Fri (+ 23:30 & next-day 14:30 retry slots) | 5:30pm ET | 5:30am | Pulls the day's actual fills from Alpaca, computes the market conditions at each entry plus the regime filter's `regime_ev`, appends rows to `results/paper_journal.csv`, and **commits the file back to the repo**. |
+| `weekly-tune` | 08:00 Sat | 4:00am ET | 4:00pm | Re-tunes parameters on the rolling 60-day window, refreshes the backtest journal, re-runs the walk-forward regime report and **re-fits the live regime filter**; commits `TUNING.md`, `trades.csv`, `REGIME.md`, `regime_model.joblib`. |
 
 GitHub's cron is best-effort (runs fired hours late or not at all during the
 2026-08-26/27 Actions incidents), so the primary trigger is an external
@@ -223,9 +292,9 @@ Every trade — backtest (`results/trades.csv`) and paper
 day average) · `mkt_spy_change_pct` (what the index was doing) · `hour_et` ·
 `weekday`
 
-That's the raw material for the next phase: instead of asking "which stop is
-best?", ask "under which conditions does this strategy win at all?" — regime
-filters learned from the journal.
+Five time-series features join them: `mkt_realized_vol_pct`, `mkt_trend_slope_pct`,
+`mkt_autocorr_1`, `mkt_atr_pct`, `mkt_range_pos`. This is the dataset the regime
+filters (`trading-lab regime`, above) learn from.
 
 ## Methodology & limitations (read before believing any number)
 
@@ -255,8 +324,14 @@ filters learned from the journal.
       `<name>_tuned` variants alongside the nine defaults, refreshed each tune run
 - [x] v0.6 — long **and** short: every strategy trades its mirror setup, signed
       P&L, ATR/percent stops flip sides, Alpaca SELL-short brackets in paper
-- [ ] Walk-forward validation (multiple train/test folds instead of one split)
-- [ ] Regime filters learned from the journal (trade only where the conditions data says the strategy wins)
+- [x] v0.7 — walk-forward validation (expanding-window folds) and **regime filters**
+      learned from the journal, checked against same-size random selection: the best
+      filter cuts OOS losses ~⅔ but no filtered book is positive yet
+- [x] v0.8 — the regime filter goes live: `<name>_regime` variants trade only the
+      signals the filter keeps, every journal row carries `regime_ev`, and the
+      Saturday workflow re-fits the model as the window rolls
+- [ ] Judge the live regime book once ~100 `_regime` fills exist: kept vs skipped
+      expectancy on real fills, against the walk-forward numbers
 - [ ] Longer history + true gappers via Alpaca's historical minute data
 - [ ] Short side for the momentum setups
 - [ ] **Gate:** paper trading is the data-collection lab; nothing touches real money

@@ -1,9 +1,13 @@
 name: Weekly tune
 
-# Saturday, after the trading week: grid-search parameters on the rolling
-# 60-day window and commit the tuning report plus a row per strategy to
-# results/tuning_history.csv — the week-over-week stability record that says
-# whether "best" parameters persist or churn (churn = the grid fits noise).
+# Saturday, after the trading week, on the rolling 60-day window:
+#   1. tune  — grid-search parameters; commit TUNING.md + a row per strategy to
+#      results/tuning_history.csv (week-over-week stability: persist or churn?)
+#   2. backtest — refresh results/trades.csv so the regime filter sees the
+#      newest sessions (the window drops a week and gains a week)
+#   3. regime — walk-forward report + re-fit the live filter
+#      (results/regime_model.joblib) the paper scanner trades as `_regime`
+#      variants next week.
 # Not time-critical, so GitHub's best-effort cron is fine here — no external
 # cron-job.org slot needed (see docs/external-cron.md).
 on:
@@ -31,11 +35,20 @@ jobs:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
         run: uv run trading-lab tune
-      - name: Commit the tuning report and history
+      - name: Refresh the backtest journal on the rolling window
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: uv run trading-lab backtest
+      - name: Re-fit the regime filter (walk-forward report + live model)
+        run: uv run trading-lab regime
+      - name: Commit the tuning report, refreshed backtest, and regime filter
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add results/TUNING.md results/tuning_shrinkage.png results/tuning_history.csv results/tuned_params.json
-          git diff --cached --quiet && echo "No tuning changes." && exit 0
-          git commit -m "tune: weekly stability run $(date -u +%F)"
+          git add results/trades.csv results/RESULTS.md results/equity_curves.png
+          git add results/REGIME.md results/regime_oos.png results/regime_model.joblib
+          git diff --cached --quiet && echo "No weekly changes." && exit 0
+          git commit -m "weekly: tune + backtest refresh + regime re-fit $(date -u +%F)"
           git push

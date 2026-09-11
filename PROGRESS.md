@@ -3,6 +3,67 @@
 A running record of what was built, what the data said, and what changed my
 mind — kept honest for portfolio purposes.
 
+## 2026-09-11 — v0.7/v0.8: regime filters, walk-forward, the win-rate trap again — then live
+
+**Goal.** v0.2 ended with "regime problem, not parameter problem": every strategy
+lost in the held-out month whatever its stops. The journal has recorded market
+conditions at entry since v0.3, so the question was finally testable — can a
+model learn *when* each strategy pays, and does that survive out of sample?
+
+**Built.** `trading-lab regime`: a pooled model over the 3,092 backtest trades
+(conditions + strategy + side; SPY move, trend slope, VWAP distance and
+open→entry move are signed by trade direction so a short in a falling tape and
+a long in a rising one read as the same regime). Four model kinds — two P(win)
+classifiers converted to dollars with the training fold's average win/loss,
+two P&L regressors. **Walk-forward validation** replaces the single split: 20
+train-only sessions, then 5-session blocks each scored by a model trained only
+on earlier sessions (8 folds, 40 OOS sessions). Every filter is scored against
+2,000 random subsets of the same size — the honest baseline for "dropping
+trades helped." Eleven tests, including a planted-regime dataset the filter
+must find and a noise dataset it must not claim.
+
+**Result: suggestive, not established.**
+
+- The gradient-boosted P&L regressor keeps 295 of 2,063 OOS trades and lifts
+  expectancy from **−$13.03 to −$4.82/trade** (PF 0.70 → 0.87), at the **92nd
+  percentile** of same-size random selections. Its predicted-EV quintiles are
+  monotonic out of sample (−$20.36 → −$3.52/trade; 34% → 46% win rate). Real
+  signal — but the top quintile still loses, and 92nd is not 99th.
+- **The win-rate trap came back wearing a model.** Both P(win) classifiers had
+  OOS AUC ≈ 0.55 — mildly predictive — and the gradient-boosted one *underperformed
+  random selection* (−$22.96/trade, 3rd percentile). The trades it rated most
+  likely to win were those that won small and lost big, exactly v0.1's finding
+  about RSI(2) at the strategy level. Regressing P&L directly fixed it. First
+  run took an hour to build and ten minutes to disbelieve; the calibration table
+  now lives in the report so the next model can't hide it.
+- **What the filter actually does is switch strategies off.** Zero EMA, news, or
+  squeeze trades survive out of sample; ORB's survivors turn +$17.32/trade (PF
+  1.19, n=31); AR Forecast goes to breakeven. The most important features are
+  direction-signed trend slope, overnight gap, and the open→entry move.
+- **Paper fills point the same way, on 15 trades.** A filter fitted only on
+  sessions before 2026-08-24 kept 15 of the 159 real paper fills since; they
+  averaged +$118.91 vs −$25.86 for the whole book. Logged as a direction check.
+
+**Is it data-starved? Measured, same day.** Holding the test set fixed to the
+last 20 sessions and varying the training window: 10, 20, and 30 sessions of
+history gave filters no better than random (31st, 17th, 49th percentile); 40
+sessions gave **+$32.47/trade kept** at the 100th percentile. Trades within a
+session share the tape (session-mean P&L varies ~60% more than independence
+would allow), so the effective sample is ~60 sessions, not 3,092 trades. One
+point on a steep curve — but it says the constraint is *sessions*, and the paper
+loop at ~50 fills/week won't supply them; Alpaca's minute history can.
+
+**Then live (v0.8, same day).** The filter is now a live A/B like the tuned
+variants: `trading-lab regime` saves the primary model fitted on all sessions
+(`results/regime_model.joblib`); the scanner scores every default strategy's
+signal with it and places a second order tagged `<name>_regime` only when the
+predicted EV is positive; the nightly journal stamps every row with
+`regime_ev`; and the Saturday workflow refreshes the backtest, re-runs the
+walk-forward report, and re-fits the model as the 60-day window rolls. Four
+more tests (variant naming, single-signal scoring equals batch scoring, planted
+regime ranks aligned signals higher, model save/load). The judgement comes
+when ~100 `_regime` fills exist. Full tables: [results/REGIME.md](results/REGIME.md).
+
 ## 2026-08-23 — v0.3: news strategy goes live, automation, and the journal
 
 **Built.** Three new strategies — **News Momentum** (fresh Alpaca-API headline
