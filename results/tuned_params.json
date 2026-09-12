@@ -1,74 +1,74 @@
 {
-  "generated": "2026-09-08",
+  "generated": "2026-09-12",
   "strategies": {
     "orb": {
       "params": {
-        "range_bars": 6,
+        "range_bars": 3,
         "target_r": 1.5,
         "stop_at_mid": false
       },
-      "train_expectancy": 5.95,
-      "test_expectancy": 3.56
+      "train_expectancy": -8.2,
+      "test_expectancy": -6.87
     },
     "vwap_pullback": {
       "params": {
         "target_r": 3.0,
         "stop_buffer": 0.995
       },
-      "train_expectancy": -7.55,
-      "test_expectancy": -25.4
+      "train_expectancy": -21.16,
+      "test_expectancy": -13.53
     },
     "ema_crossover": {
       "params": {
-        "fast": 5,
+        "fast": 12,
         "slow": 13,
-        "stop_bars": 10
+        "stop_bars": 5
       },
-      "train_expectancy": 0.18,
-      "test_expectancy": -23.44
+      "train_expectancy": -11.84,
+      "test_expectancy": -11.58
     },
     "rsi2_reversion": {
       "params": {
-        "entry_level": 15.0,
+        "entry_level": 10.0,
         "exit_level": 70.0,
-        "stop_pct": 0.005
+        "stop_pct": 0.02
       },
-      "train_expectancy": -9.03,
-      "test_expectancy": -10.9
+      "train_expectancy": -7.49,
+      "test_expectancy": -11.05
     },
     "news_momentum": {
       "params": {
-        "window_min": 60,
-        "vol_mult": 1.5,
-        "target_r": 3.0
+        "window_min": 30,
+        "vol_mult": 1.2,
+        "target_r": 1.5
       },
-      "train_expectancy": 7.95,
-      "test_expectancy": -10.86
+      "train_expectancy": -11.87,
+      "test_expectancy": -18.92
     },
     "squeeze_breakout": {
       "params": {
         "bw_lookback": 6,
         "target_r": 1.5
       },
-      "train_expectancy": -9.82,
-      "test_expectancy": -34.11
+      "train_expectancy": -19.93,
+      "test_expectancy": -19.45
     },
     "high_break_trail": {
       "params": {
-        "window_bars": 6,
+        "window_bars": 12,
         "trail_atr_mult": 1.5
       },
-      "train_expectancy": 6.69,
-      "test_expectancy": 9.11
+      "train_expectancy": -16.4,
+      "test_expectancy": -7.65
     },
     "ar_forecast": {
       "params": {
         "lags": 12,
-        "horizon": 12,
+        "horizon": 6,
         "threshold": 0.002
       },
-      "train_expectancy": 0.09,
-      "test_expectancy": -9.45
+      "train_expectancy": -0.7,
+      "test_expectancy": -5.85
     }
   }
 }
