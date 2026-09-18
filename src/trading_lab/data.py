@@ -31,7 +31,9 @@ def _normalize(frame: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _download(symbols: list[str], interval: str, period: str, threads: bool) -> dict[str, pd.DataFrame]:
+def _download(
+    symbols: list[str], interval: str, period: str, threads: bool
+) -> dict[str, pd.DataFrame]:
     """One yf.download pass, normalized per symbol; a failed symbol comes back empty."""
     raw = yf.download(
         tickers=" ".join(symbols),
@@ -47,7 +49,7 @@ def _download(symbols: list[str], interval: str, period: str, threads: bool) -> 
         try:
             frame = raw[sym] if len(symbols) > 1 else raw.droplevel("Ticker", axis=1)
             out[sym] = _normalize(frame)
-        except Exception:  # noqa: BLE001 — a symbol absent from the batch is just a failed download
+        except Exception:  # a symbol absent from the batch is just a failed download
             out[sym] = pd.DataFrame(columns=COLUMNS)
     return out
 
@@ -159,7 +161,7 @@ def load_news(
                 token = payload.get("next_page_token")
                 if not token:
                     break
-    except Exception as exc:  # noqa: BLE001 — news is best-effort; never fail the run
+    except Exception as exc:  # news is best-effort; never fail the run
         print(f"warning: news fetch failed ({exc}) — news_momentum will take no trades")
         return {}
 

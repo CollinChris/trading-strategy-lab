@@ -39,6 +39,11 @@ class _Open:
     conditions: dict
     direction: int = 1  # +1 long, -1 short
 
+    @property
+    def exit_side(self) -> str:
+        """The fill side that closes this position."""
+        return "sell" if self.direction == 1 else "buy"
+
 
 @dataclass(frozen=True)
 class Trade:
@@ -84,12 +89,8 @@ def entry_conditions(
     ts = day.index[i]
     day_open = float(day["open"].iloc[0])
     gap = (day_open / prior_close - 1.0) * 100.0 if prior_close else float("nan")
-    vol_so_far = day["volume"].iloc[:i]
-    rel_vol = (
-        float(day["volume"].iloc[i - 1] / vol_so_far.mean())
-        if i >= 1 and vol_so_far.mean() > 0
-        else float("nan")
-    )
+    avg_vol = float(day["volume"].iloc[:i].mean()) if i >= 1 else 0.0
+    rel_vol = float(day["volume"].iloc[i - 1]) / avg_vol if avg_vol > 0 else float("nan")
     spy_change = float("nan")
     if spy_day is not None and not spy_day.empty:
         spy_close = spy_day["close"].asof(ts)
@@ -201,8 +202,7 @@ def run_symbol_day(
 
         # 1) Dynamic exit signalled on the previous bar fills at this open.
         if pos is not None and pending_exit:
-            exit_side = "sell" if pos.direction == 1 else "buy"
-            close(pos, ts, _fill_price(bar_open, cfg.slippage_bps, exit_side), "signal")
+            close(pos, ts, _fill_price(bar_open, cfg.slippage_bps, pos.exit_side), "signal")
             pos = None
         pending_exit = False
 
@@ -234,16 +234,15 @@ def run_symbol_day(
         # 3) Intra-bar stop first (conservative), then target; then ratchet any
         #    trailing stop using this bar's extreme (applies from the next bar on).
         if pos is not None:
-            exit_side = "sell" if pos.direction == 1 else "buy"
             stop_hit = bar_low <= pos.stop if pos.direction == 1 else bar_high >= pos.stop
             target_hit = pos.target is not None and (
                 bar_high >= pos.target if pos.direction == 1 else bar_low <= pos.target
             )
             if stop_hit:
-                close(pos, ts, _fill_price(pos.stop, cfg.slippage_bps, exit_side), "stop")
+                close(pos, ts, _fill_price(pos.stop, cfg.slippage_bps, pos.exit_side), "stop")
                 pos = None
             elif target_hit:
-                close(pos, ts, _fill_price(pos.target, cfg.slippage_bps, exit_side), "target")
+                close(pos, ts, _fill_price(pos.target, cfg.slippage_bps, pos.exit_side), "target")
                 pos = None
             elif pos.trail_dist is not None:
                 if pos.direction == 1:
@@ -255,8 +254,7 @@ def run_symbol_day(
         at_eod = i == last_i or ts.time() >= eod_cutoff
         if at_eod:
             if pos is not None:
-                exit_side = "sell" if pos.direction == 1 else "buy"
-                close(pos, ts, _fill_price(bar_close, cfg.slippage_bps, exit_side), "eod")
+                close(pos, ts, _fill_price(bar_close, cfg.slippage_bps, pos.exit_side), "eod")
                 pos = None
             if ts.time() >= eod_cutoff:
                 break
@@ -307,7 +305,7 @@ def load_spy_by_date(cfg: Config) -> dict[dt.date, pd.DataFrame]:
     """SPY session frames keyed by date — market context for the trade journal."""
     try:
         spy = load_bars(["SPY"], cfg.interval, cfg.period)["SPY"]
-    except Exception as exc:  # noqa: BLE001 — market-context is best-effort, never fatal
+    except Exception as exc:  # market context is best-effort, never fatal
         print(f"warning: SPY context unavailable ({exc})")
         return {}
     return {date: day for date, day, _ in split_days(spy)}

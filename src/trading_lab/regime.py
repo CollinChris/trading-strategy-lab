@@ -31,6 +31,7 @@ Honesty rules, in code rather than in prose:
 from __future__ import annotations
 
 import datetime as dt
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -45,7 +46,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostin
 from sklearn.linear_model import LogisticRegression, Ridge
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, export_text
 
 from .data import market_today
 from .report import BASELINE, GRID, INK, INK_2, MUTED, STRATEGIES, SURFACE, _md_table
@@ -193,16 +194,16 @@ class ExpectedValue:
         pooled_loss = float(losses.mean()) if len(losses) else 0.0
         avg_win, avg_loss = {}, {}
         for name, grp in pnl.groupby(base):
-            w, l = grp[grp > 0], grp[grp <= 0]
+            w, lo = grp[grp > 0], grp[grp <= 0]
             avg_win[name] = float(w.mean()) if len(w) >= 5 else pooled_win
-            avg_loss[name] = float(l.mean()) if len(l) >= 5 else pooled_loss
+            avg_loss[name] = float(lo.mean()) if len(lo) >= 5 else pooled_loss
         return cls(avg_win, avg_loss, pooled_win, pooled_loss)
 
     def ev(self, strategy: pd.Series, p_win: np.ndarray) -> np.ndarray:
         base = base_name(strategy)
         w = base.map(self.avg_win).fillna(self.pooled_win).to_numpy()
-        l = base.map(self.avg_loss).fillna(self.pooled_loss).to_numpy()
-        return p_win * w + (1.0 - p_win) * l
+        lo = base.map(self.avg_loss).fillna(self.pooled_loss).to_numpy()
+        return p_win * w + (1.0 - p_win) * lo
 
 
 # --------------------------------------------------------------------------- fitted filter
@@ -362,7 +363,7 @@ def walk_forward(
 
     strat_rows = []
     base = base_name(scored["strategy"])
-    for seed, name in enumerate(list(STRATEGIES) + ["ALL"]):
+    for seed, name in enumerate([*STRATEGIES, "ALL"]):
         grp = scored if name == "ALL" else scored[base == name]
         if grp.empty:
             continue
@@ -411,8 +412,6 @@ def _oos_permutation_importance(
     (test fold only, model untouched) — importance measured on the decision
     that matters, not on log-loss. Strategy one-hots are excluded: they are
     identity, not regime."""
-    from collections import defaultdict
-
     rng = np.random.default_rng(0)
     drops: dict[str, list[float]] = defaultdict(list)
     for fold in folds:
@@ -437,8 +436,6 @@ def _oos_permutation_importance(
 def descriptive_rules(trades: pd.DataFrame, max_depth: int = 2) -> dict[str, str]:
     """IN-SAMPLE depth-2 tree per strategy, rendered as text — a readable
     caricature of where each strategy's wins cluster. Explanation, not evidence."""
-    from sklearn.tree import export_text
-
     rules = {}
     base = base_name(trades["strategy"])
     cols = RAW_FEATURES + list(SIGNED_FEATURES) + ["is_short", "weekday_num"]
@@ -731,7 +728,7 @@ def run_regime(
 def _render(
     results, primary: WalkForwardResult, rules, paper, sessions, min_train, block, live_meta
 ) -> str:
-    n_oos = len({d for d in primary.scored["date"]})
+    n_oos = primary.scored["date"].nunique()
     model_rows = pd.DataFrame(
         [
             {
@@ -761,10 +758,10 @@ def _render(
         paper_md = f"""## Paper-journal check (real fills, different execution path)
 
 A filter fitted only on backtest sessions before the paper loop's first fill
-({paper['from']}) was applied to the **{paper['trades']} real paper trades** from
-{paper['from']} to {paper['to']}. It kept {paper['kept']}; expectancy
-{_fmt_money(paper['exp_all'])} → {_fmt_money(paper['exp_kept'])}/trade
-({_ordinal(paper['random_pctile'])} percentile vs same-size random selection). Small
+({paper["from"]}) was applied to the **{paper["trades"]} real paper trades** from
+{paper["from"]} to {paper["to"]}. It kept {paper["kept"]}; expectancy
+{_fmt_money(paper["exp_all"])} → {_fmt_money(paper["exp_kept"])}/trade
+({_ordinal(paper["random_pctile"])} percentile vs same-size random selection). Small
 sample — a direction check, not a verdict.
 """
     else:

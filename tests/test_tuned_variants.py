@@ -1,7 +1,5 @@
 """Tuned-variant plumbing: registry overrides, dedup, JSON roundtrip."""
 
-from pathlib import Path
-
 from trading_lab.strategies import RsiReversion, all_strategies
 
 
@@ -30,8 +28,13 @@ def test_json_roundtrip(tmp_path, monkeypatch):
     from trading_lab.tune import _write_tuned_params
 
     _write_tuned_params(
-        {"orb": {"params": {"range_bars": 6, "target_r": 1.5, "stop_at_mid": False},
-                 "train_expectancy": 5.95, "test_expectancy": 3.56}},
+        {
+            "orb": {
+                "params": {"range_bars": 6, "target_r": 1.5, "stop_at_mid": False},
+                "train_expectancy": 5.95,
+                "test_expectancy": 3.56,
+            }
+        },
         tmp_path,
     )
     monkeypatch.setattr(paper, "TUNED_PATH", tmp_path / "tuned_params.json")

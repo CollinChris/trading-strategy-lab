@@ -56,4 +56,4 @@ class EmaCrossover(Strategy):
 
     def exit_signal(self, i: int) -> bool:
         diff = float(self.fast.iloc[i]) - float(self.slow.iloc[i])
-        return diff * getattr(self, "_side", 1) < 0  # EMAs crossed back against the position
+        return diff * self._side < 0  # EMAs crossed back against the position

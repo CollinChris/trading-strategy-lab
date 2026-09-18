@@ -20,7 +20,7 @@ def trending_closes(n=80, start=100.0, drift=0.002):
 
 def feed(strategy, sessions):
     """Run new_day over sessions in order, return the strategy ready on the last."""
-    for closes, date in zip(sessions, DATES):
+    for closes, date in zip(sessions, DATES, strict=True):
         strategy.new_day(day_from_closes(closes, date), None)
     return strategy
 
@@ -49,9 +49,7 @@ def test_needs_history_before_trading():
 def test_no_lookahead():
     # The signal at bar i must not change when bars after i change.
     rng = np.random.default_rng(7)
-    sessions = [
-        100.0 * np.exp(np.cumsum(rng.normal(0.0004, 0.002, 80))) for _ in range(3)
-    ]
+    sessions = [100.0 * np.exp(np.cumsum(rng.normal(0.0004, 0.002, 80))) for _ in range(3)]
     i = 40
     baseline = feed(ArForecast(), sessions)._forecast(i)
 

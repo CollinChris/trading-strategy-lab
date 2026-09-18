@@ -94,7 +94,6 @@ def test_position_size_short_risk():
 
 
 def test_orb_short_signal():
-    n = 12
     closes = [100, 100, 100, 97, 97, 97, 97, 97, 97, 97, 97, 97]
     day = make_day(closes, [c + 0.5 for c in closes], [c - 0.5 for c in closes], closes)
     strat = OpeningRangeBreakout(range_bars=3)

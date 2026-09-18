@@ -116,4 +116,4 @@ class ArForecast(Strategy):
         if self._entry_bar is not None and i - self._entry_bar >= self.horizon:
             return True
         pred = self._forecast(i)
-        return pred is not None and pred * getattr(self, "_side", 1) < 0.0
+        return pred is not None and pred * self._side < 0.0

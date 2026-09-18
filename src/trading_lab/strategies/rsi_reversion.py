@@ -53,6 +53,6 @@ class RsiReversion(Strategy):
 
     def exit_signal(self, i: int) -> bool:
         rsi_now = float(self.rsi2.iloc[i])
-        if getattr(self, "_side", 1) == 1:
+        if self._side == 1:
             return rsi_now > self.exit_level
         return rsi_now < 100.0 - self.exit_level

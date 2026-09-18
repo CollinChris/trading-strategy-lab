@@ -9,7 +9,7 @@ Contract (enforced by the engine, relied on for zero lookahead):
   time-series models) — but only from sessions already handed to it.
 - entry_signal(i) is evaluated on the COMPLETED bar i; a resulting entry fills
   at bar i+1's open.
-- exit_signal(i, ...) likewise fills at bar i+1's open. Stops and targets are
+- exit_signal(i) likewise fills at bar i+1's open. Stops and targets are
   monitored intra-bar by the engine itself.
 
 Signals carry a side. For a short: the stop sits ABOVE entry (stop_pct means
@@ -44,6 +44,7 @@ class Strategy(ABC):
     name: str = "base"
     max_trades_per_day: int = 1
     symbol: str = ""  # set by the engine before new_day() — for context-aware strategies
+    _side: int = 1  # direction of the last entry emitted (+1/-1); dynamic exits key off it
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         """Reset state and precompute causal indicators for one session."""

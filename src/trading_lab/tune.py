@@ -11,6 +11,7 @@ is the overfitting, made visible.
 from __future__ import annotations
 
 import datetime as dt
+import json
 from itertools import product
 from pathlib import Path
 from typing import Any
@@ -44,7 +45,7 @@ MIN_TRAIN_TRADES = 20  # fewer than this and a parameter set is noise, not evide
 
 def _grid(**options: list[Any]) -> list[dict[str, Any]]:
     keys = list(options)
-    return [dict(zip(keys, combo)) for combo in product(*options.values())]
+    return [dict(zip(keys, combo, strict=True)) for combo in product(*options.values())]
 
 
 # Search spaces: stop placement, targets, and entry thresholds per strategy.
@@ -135,6 +136,7 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
         # news_momentum needs the headline index injected alongside its params
         extra = {"news_index": news} if name == "news_momentum" else {}
         best_params: dict[str, Any] | None = None
+        best_trades: pd.DataFrame | None = None
         best_score = float("-inf")
         skipped = 0
         for params in grid:
@@ -144,7 +146,7 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
                 continue
             score = _expectancy(trades)
             if score > best_score:
-                best_score, best_params = score, params
+                best_score, best_params, best_trades = score, params, trades
         if best_params is None:
             print(
                 f"{label}: no parameter set produced ≥{MIN_TRAIN_TRADES} train trades — not tunable on this data."
@@ -160,7 +162,7 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
             )
             continue
 
-        train_stats = _stats(run_on(bars, _factory(cls, {**best_params, **extra}), cfg, train))
+        train_stats = _stats(best_trades)  # the grid loop already ran this exact set
         test_stats = _stats(run_on(bars, _factory(cls, {**best_params, **extra}), cfg, test))
         default_test = _stats(run_on(bars, _factory(cls, extra), cfg, test))
         tuned_out[name] = {
@@ -193,8 +195,6 @@ def _write_tuned_params(tuned: dict[str, dict], out_dir: Path) -> None:
     """results/tuned_params.json — consumed by the paper scanner, which trades
     each entry as a `<name>_tuned` variant ALONGSIDE the defaults. Overwritten
     every tune run, so the live A/B always tests the freshest parameters."""
-    import json
-
     payload = {"generated": market_today().isoformat(), "strategies": tuned}
     (out_dir / "tuned_params.json").write_text(json.dumps(payload, indent=2) + "\n")
 

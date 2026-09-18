@@ -7,8 +7,8 @@ hours (cron / GitHub Actions), mirroring the backtest's next-bar execution.
 
 Simplifications vs the backtest (documented in the README):
 - one paper trade per strategy+symbol per day (tracked in data/paper_state.json)
-- dynamic-exit strategies (EMA crossover, RSI reversion) trade with a stop-only
-  bracket; run `trading-lab paper --flatten` at ~15:55 ET for the EOD exit.
+- dynamic-exit strategies (EMA crossover, RSI reversion, AR forecast) trade with
+  a stop-only bracket; `trading-lab paper --flatten` at 15:40 ET is the EOD exit.
 
 Requires ALPACA_API_KEY / ALPACA_SECRET_KEY in .env — paper keys only.
 """
@@ -24,7 +24,7 @@ from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 
-from .backtest import entry_conditions, position_size
+from .backtest import entry_conditions, load_spy_by_date, position_size
 from .config import Config
 from .data import MARKET_TZ, load_bars, load_news, market_today, split_days
 from .indicators import atr, session_vwap
@@ -88,7 +88,9 @@ def _save_state(state: dict[str, list[str]]) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2))
 
 
-def _fits_symbol_cap(committed: dict[str, float], symbol: str, order_notional: float, cap: float) -> bool:
+def _fits_symbol_cap(
+    committed: dict[str, float], symbol: str, order_notional: float, cap: float
+) -> bool:
     """Whether adding order_notional keeps the symbol at or under its cap."""
     return committed.get(symbol, 0.0) + order_notional <= cap
 
@@ -213,7 +215,7 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
                     continue
                 try:
                     _submit(client, symbol, qty, stop, target, otag, sig.side)
-                except Exception as exc:  # noqa: BLE001 — one bad order must not stop the scan
+                except Exception as exc:  # one bad order must not stop the scan
                     # Deterministic client_order_id doubles as the dedup key on
                     # stateless runners: Alpaca rejects a reused id.
                     if "client_order_id" in str(exc) or "unique" in str(exc).lower():
@@ -318,14 +320,13 @@ def journal(cfg: Config) -> None:
     with entry/exit fills from Alpaca plus the same market-condition snapshot
     the backtester records — so paper results accumulate into a tuning dataset.
     Exits closed by --flatten instead of a bracket leg are matched best-effort
-    to the earliest sell fill for that symbol after the entry. A trade whose
+    to the earliest closing fill for that symbol after the entry (a sell for a
+    long, a buy-to-cover for a short). A trade whose
     position is still open is journaled with exit_reason="open" and re-visited
     on later runs; once its exit fills, the placeholder row is replaced.
     """
     from alpaca.trading.enums import QueryOrderStatus
     from alpaca.trading.requests import GetOrdersRequest
-
-    from .backtest import load_spy_by_date
 
     client = _client()
     regime = _load_regime()
@@ -344,11 +345,7 @@ def journal(cfg: Config) -> None:
     )
 
     bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d", on_missing="skip")
-    try:
-        spy_by_date = load_spy_by_date(Config(symbols=cfg.symbols, period="5d"))
-    except Exception as exc:  # noqa: BLE001 — conditions are best-effort; journal regardless
-        print(f"warning: SPY conditions unavailable ({exc})")
-        spy_by_date = {}
+    spy_by_date = load_spy_by_date(Config(symbols=cfg.symbols, period="5d"))  # {} on failure
 
     existing = pd.read_csv(JOURNAL_PATH) if JOURNAL_PATH.exists() else None
     already: set[str] = set()

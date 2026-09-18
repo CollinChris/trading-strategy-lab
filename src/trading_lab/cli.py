@@ -11,7 +11,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="trading-lab")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    bt = sub.add_parser("backtest", help="run all five strategies and write results/")
+    bt = sub.add_parser("backtest", help="run every strategy over the window and write results/")
     bt.add_argument("--symbols", nargs="*", default=DEFAULT_SYMBOLS)
     bt.add_argument("--interval", default="5m")
     bt.add_argument("--period", default="60d")
