@@ -88,6 +88,11 @@ def _save_state(state: dict[str, list[str]]) -> None:
     STATE_PATH.write_text(json.dumps(state, indent=2))
 
 
+def _fits_symbol_cap(committed: dict[str, float], symbol: str, order_notional: float, cap: float) -> bool:
+    """Whether adding order_notional keeps the symbol at or under its cap."""
+    return committed.get(symbol, 0.0) + order_notional <= cap
+
+
 def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     """One pass: signal on the latest completed bar -> bracket market order."""
     now_et = dt.datetime.now(tz=MARKET_TZ)
@@ -115,6 +120,13 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
             spy_today = spy_day if spy_date.isoformat() == today else None
     client = None if dry_run else _client()
     placed = 0
+
+    # Per-symbol exposure cap, seeded from positions already open today so it
+    # holds across the day's 10-minute scans, not just within one scan.
+    committed: dict[str, float] = {}
+    if client is not None:
+        for p in client.get_all_positions():
+            committed[p.symbol] = abs(float(p.market_value))
 
     for symbol, bars in bars_by_symbol.items():
         days = split_days(bars)
@@ -187,9 +199,17 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
                         )
                 else:
                     print(f"[regime skip] {strategy.name} {symbol} EV {ev:+.2f}")
+            order_notional = qty * last_price
             for name, otag, oline in orders:
+                if not _fits_symbol_cap(committed, symbol, order_notional, cfg.max_symbol_notional):
+                    print(
+                        f"[symbol cap] {name} {symbol} — ${committed.get(symbol, 0.0):,.0f} "
+                        f"open + ${order_notional:,.0f} > ${cfg.max_symbol_notional:,.0f} cap, skipping"
+                    )
+                    continue
                 if dry_run:
                     print(f"[dry-run] {oline}")
+                    committed[symbol] = committed.get(symbol, 0.0) + order_notional
                     continue
                 try:
                     _submit(client, symbol, qty, stop, target, otag, sig.side)
@@ -204,6 +224,7 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
                     continue
                 print(f"[submitted] {oline}")
                 done_today.append(otag)
+                committed[symbol] = committed.get(symbol, 0.0) + order_notional
                 placed += 1
 
     if not dry_run:

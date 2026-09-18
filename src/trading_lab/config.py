@@ -15,6 +15,11 @@ class Config:
     notional_per_trade: float = 10_000.0  # dollars committed per trade
     slippage_bps: float = 5.0  # applied to entry and exit fills
     max_trades_per_day: int = 3  # hard cap per strategy+symbol (strategies may use fewer)
+    # Cap on total open notional per symbol in live paper trading. With ~25
+    # strategy variants able to agree on one signal bar, a crowded name could
+    # otherwise stack 10x notional in one symbol (PLTR, 2026-09-17). ~3 trades'
+    # worth keeps a little agreement while bounding single-symbol exposure.
+    max_symbol_notional: float = 30_000.0
     entry_cutoff: str = "15:30"  # no new entries at/after this bar (US/Eastern)
     eod_cutoff: str = "15:55"  # flatten everything at/after this bar (US/Eastern)
     # Volatility-scaled risk (opt-in experiment, off by default). When on:

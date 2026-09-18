@@ -262,14 +262,16 @@ class RegimeFilter:
         return float(self.expected_value(pd.DataFrame([row]))[0])
 
 
-def save_filter(flt: RegimeFilter, meta: dict, path: Path = MODEL_PATH) -> None:
+def save_filter(flt: RegimeFilter, meta: dict, path: Path | None = None) -> None:
     """Persist the live filter with its provenance (what data, which kind, when)."""
+    path = MODEL_PATH if path is None else path  # resolve at call time so MODEL_PATH is patchable
     path.parent.mkdir(exist_ok=True)
     joblib.dump({"filter": flt, "meta": meta}, path)
 
 
-def load_filter(path: Path = MODEL_PATH) -> tuple[RegimeFilter, dict] | None:
+def load_filter(path: Path | None = None) -> tuple[RegimeFilter, dict] | None:
     """The saved filter, or None when there isn't one (paper trades unfiltered then)."""
+    path = MODEL_PATH if path is None else path  # resolve at call time so MODEL_PATH is patchable
     try:
         payload = joblib.load(path)
         return payload["filter"], payload["meta"]

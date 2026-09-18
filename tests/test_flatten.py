@@ -74,3 +74,28 @@ def test_warns_when_stuck(monkeypatch, capsys):
     _patch(monkeypatch, client)
     paper.flatten()
     assert "WARNING" in capsys.readouterr().out
+
+
+def test_symbol_cap_blocks_crowding():
+    # The 2026-09-17 scenario: many strategies agree on one symbol. With a
+    # $30k cap and $10k orders, only the first three fit; the rest are blocked.
+    from trading_lab.paper import _fits_symbol_cap
+
+    cap = 30_000.0
+    committed = {}
+    fits = 0
+    for _ in range(10):  # ten strategies pile into PLTR
+        if _fits_symbol_cap(committed, "PLTR", 10_000.0, cap):
+            committed["PLTR"] = committed.get("PLTR", 0.0) + 10_000.0
+            fits += 1
+    assert fits == 3
+    assert committed["PLTR"] == 30_000.0
+
+
+def test_symbol_cap_counts_existing_position():
+    from trading_lab.paper import _fits_symbol_cap
+
+    committed = {"COIN": 25_000.0}  # already open from earlier scans today
+    assert _fits_symbol_cap(committed, "COIN", 5_000.0, 30_000.0)  # fits exactly
+    assert not _fits_symbol_cap(committed, "COIN", 6_000.0, 30_000.0)  # would exceed
+    assert _fits_symbol_cap(committed, "NVDA", 10_000.0, 30_000.0)  # other symbol unaffected
