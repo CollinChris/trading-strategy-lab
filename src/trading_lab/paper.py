@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -231,11 +232,50 @@ def _submit(
 
 
 def flatten() -> None:
-    """Close all paper positions and cancel open orders (EOD discipline)."""
+    """Close all paper positions and cancel open orders (EOD discipline).
+
+    Only acts while the market is open: a close order submitted after hours
+    can't fill, it just queues as a DAY order and later runs cancel/resubmit
+    each other's queued orders — which is exactly how positions leaked
+    overnight (2026-09-17). Cancellation is async at Alpaca, and a bracket's
+    take-profit leg HOLDS the position's shares, so close_all_positions()
+    silently fails to close a position whose legs haven't cleared yet. We
+    therefore cancel, WAIT for the orders to actually clear, then close and
+    verify — retrying once for any position still standing.
+    """
     client = _client()
-    client.cancel_orders()
-    closed = client.close_all_positions(cancel_orders=True)
-    print(f"Flattened {len(closed)} position(s); all open orders cancelled.")
+
+    clock = client.get_clock()
+    if not clock.is_open:
+        positions = client.get_all_positions()
+        print(
+            f"Market closed — skipping flatten ({len(positions)} position(s) held; "
+            "they will be closed at the next in-session flatten)."
+        )
+        return
+
+    for attempt in (1, 2):
+        client.cancel_orders()
+        # Wait for the cancels to propagate so bracket legs release the shares.
+        for _ in range(10):
+            if not client.get_orders():
+                break
+            time.sleep(1)
+        client.close_all_positions(cancel_orders=True)
+        # close_all_positions returns before fills settle; poll for an empty book.
+        remaining = client.get_all_positions()
+        for _ in range(10):
+            if not remaining:
+                break
+            time.sleep(1)
+            remaining = client.get_all_positions()
+        if not remaining:
+            print("Flattened — no open positions or orders remain.")
+            return
+        print(f"Attempt {attempt}: {len(remaining)} position(s) still open, retrying...")
+
+    stuck = ", ".join(f"{p.symbol} {p.qty}" for p in remaining)
+    print(f"WARNING: could not flatten after 2 attempts: {stuck}")
 
 
 def status() -> None:
