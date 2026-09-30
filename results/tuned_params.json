@@ -1,32 +1,7 @@
 {
-  "generated": "2026-09-26",
+  "generated": "2026-09-30",
+  "promotion_rule": "identical winning params + beat defaults held-out, last 3 runs",
   "strategies": {
-    "orb": {
-      "params": {
-        "range_bars": 3,
-        "target_r": 2.0,
-        "stop_at_mid": false
-      },
-      "train_expectancy": -17.29,
-      "test_expectancy": 27.94
-    },
-    "vwap_pullback": {
-      "params": {
-        "target_r": 2.0,
-        "stop_buffer": 0.997
-      },
-      "train_expectancy": -20.25,
-      "test_expectancy": -20.79
-    },
-    "ema_crossover": {
-      "params": {
-        "fast": 12,
-        "slow": 13,
-        "stop_bars": 5
-      },
-      "train_expectancy": -10.89,
-      "test_expectancy": -24.07
-    },
     "rsi2_reversion": {
       "params": {
         "entry_level": 10.0,
@@ -35,40 +10,15 @@
       },
       "train_expectancy": -10.33,
       "test_expectancy": -9.34
-    },
-    "news_momentum": {
-      "params": {
-        "window_min": 60,
-        "vol_mult": 1.2,
-        "target_r": 1.5
-      },
-      "train_expectancy": -13.2,
-      "test_expectancy": -9.36
-    },
-    "squeeze_breakout": {
-      "params": {
-        "bw_lookback": 12,
-        "target_r": 1.5
-      },
-      "train_expectancy": -26.13,
-      "test_expectancy": -11.16
-    },
-    "high_break_trail": {
-      "params": {
-        "window_bars": 6,
-        "trail_atr_mult": 1.5
-      },
-      "train_expectancy": -25.93,
-      "test_expectancy": -7.8
-    },
-    "ar_forecast": {
-      "params": {
-        "lags": 12,
-        "horizon": 6,
-        "threshold": 0.001
-      },
-      "train_expectancy": -2.05,
-      "test_expectancy": -2.43
     }
+  },
+  "held": {
+    "orb": "best parameters changed within the last 3 runs",
+    "vwap_pullback": "best parameters changed within the last 3 runs",
+    "ema_crossover": "best parameters changed within the last 3 runs",
+    "news_momentum": "best parameters changed within the last 3 runs",
+    "squeeze_breakout": "best parameters changed within the last 3 runs",
+    "high_break_trail": "best parameters changed within the last 3 runs",
+    "ar_forecast": "best parameters changed within the last 3 runs"
   }
 }

@@ -95,6 +95,17 @@ def _fits_symbol_cap(
     return committed.get(symbol, 0.0) + order_notional <= cap
 
 
+def _long_gated(cfg: Config, strategy_name: str, side: str, have_filter: bool) -> bool:
+    """Whether this signal must pass the regime filter before it trades."""
+    base = strategy_name.removesuffix("_tuned")
+    return (
+        cfg.long_gate == "regime"
+        and side == "long"
+        and have_filter
+        and base not in cfg.long_gate_exempt
+    )
+
+
 def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     """One pass: signal on the latest completed bar -> bracket market order."""
     now_et = dt.datetime.now(tz=MARKET_TZ)
@@ -113,6 +124,8 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     news = load_news(cfg.symbols, cfg.interval, period="3d")
     tuned = _load_tuned()
     regime = _load_regime()
+    if cfg.long_gate == "regime" and regime is None:
+        print("warning: long gate is on but no regime filter is loaded — longs trade unfiltered")
     spy_today = None
     if regime is not None:
         # SPY context feeds the filter's mkt_spy_change_pct; best-effort.
@@ -179,15 +192,23 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
                 + (f" target {target:.2f}" if target else " (no target)")
                 + f" — {sig.reason}"
             )
-            # The regime variant: same signal, second order, only when the
-            # filter's predicted EV for right-now conditions is positive.
-            # Tuned variants don't get one — keep the live A/B two-way.
-            orders = [(strategy.name, tag, line)]
-            if regime is not None and not strategy.name.endswith("_tuned"):
+            gated = _long_gated(cfg, strategy.name, sig.side, regime is not None)
+            is_tuned = strategy.name.endswith("_tuned")
+            ev = None
+            if regime is not None and (gated or not is_tuned):
                 conditions = entry_conditions(
                     day, len(day) - 1, last_price, prior_close, vwap, spy_today
                 )
                 ev = regime.score_signal(strategy.name, sig.side, conditions)
+            if gated and ev <= 0:
+                print(f"[long gate] {strategy.name} {symbol} long EV {ev:+.2f} — skipped")
+                continue
+            # The regime variant: same signal, second order, only when the
+            # filter's predicted EV for right-now conditions is positive.
+            # Tuned variants don't get one — keep the live A/B two-way — and
+            # neither do gated longs: the base order already IS the filtered trade.
+            orders = [(strategy.name, tag, line)]
+            if ev is not None and not is_tuned and not gated:
                 if ev > 0:
                     rname = f"{strategy.name}_regime"
                     rtag = f"{rname}--{symbol}--{today}"

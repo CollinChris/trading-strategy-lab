@@ -41,6 +41,12 @@ from .strategies import (
 )
 
 MIN_TRAIN_TRADES = 20  # fewer than this and a parameter set is noise, not evidence
+# Survivor gate: a tuned set trades live only after it has been the grid's
+# winner with identical parameters, AND beaten the defaults on the held-out
+# split, in each of the last PROMOTE_RUNS weekly runs. Weekly winners churned
+# 2-3 times in 4 runs (to 2026-09-26) and tuned variants lost more live than
+# the defaults — promoting every Saturday's winner was trading noise.
+PROMOTE_RUNS = 3
 
 
 def _grid(**options: list[Any]) -> list[dict[str, Any]]:
@@ -185,17 +191,56 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
             f"train ${train_stats['expectancy']:+.2f}/trade → test ${test_stats['expectancy']:+.2f}/trade"
         )
 
-    path = _write_report(rows, cfg, cut, len(train), len(test), out_dir)
     _append_history(rows, out_dir)
-    _write_tuned_params(tuned_out, out_dir)
-    return path
+    promoted, held = promote(tuned_out, out_dir / "tuning_history.csv")
+    for name in promoted:
+        print(f"promoted → trades live as {name}_tuned")
+    for name, why in held.items():
+        print(f"held back {name}: {why}")
+    _write_tuned_params(promoted, out_dir, held)
+    return _write_report(rows, cfg, cut, len(train), len(test), out_dir, promoted, held)
 
 
-def _write_tuned_params(tuned: dict[str, dict], out_dir: Path) -> None:
-    """results/tuned_params.json — consumed by the paper scanner, which trades
-    each entry as a `<name>_tuned` variant ALONGSIDE the defaults. Overwritten
-    every tune run, so the live A/B always tests the freshest parameters."""
-    payload = {"generated": market_today().isoformat(), "strategies": tuned}
+def promote(
+    tuned: dict[str, dict], history_path: Path, runs: int = PROMOTE_RUNS
+) -> tuple[dict[str, dict], dict[str, str]]:
+    """Split this run's tuned sets into (promoted, held-with-reason) by the
+    survivor gate. Consecutive runs share most of their 60-day window, so
+    passing is persistence, not independent confirmation — the live A/B is
+    still the real test."""
+    hist = pd.read_csv(history_path) if history_path.exists() else pd.DataFrame()
+    promoted: dict[str, dict] = {}
+    held: dict[str, str] = {}
+    for name, entry in tuned.items():
+        label = STRATEGIES[name][0]
+        recent = (
+            hist[hist["strategy"] == label].sort_values("run_date").tail(runs)
+            if not hist.empty
+            else hist
+        )
+        if len(recent) < runs:
+            held[name] = f"only {len(recent)} of {runs} weekly runs so far"
+        elif recent["best_params"].nunique() != 1:
+            held[name] = f"best parameters changed within the last {runs} runs"
+        elif not (recent["test_expectancy"] > recent["default_test_expectancy"]).all():
+            held[name] = f"did not beat the defaults on held-out data in all {runs} runs"
+        else:
+            promoted[name] = entry
+    return promoted, held
+
+
+def _write_tuned_params(
+    tuned: dict[str, dict], out_dir: Path, held: dict[str, str] | None = None
+) -> None:
+    """results/tuned_params.json — the paper scanner trades each entry under
+    "strategies" as a `<name>_tuned` variant ALONGSIDE the defaults. Only
+    survivor-gate passes land there; "held" records why the rest didn't."""
+    payload = {
+        "generated": market_today().isoformat(),
+        "promotion_rule": f"identical winning params + beat defaults held-out, last {PROMOTE_RUNS} runs",
+        "strategies": tuned,
+        "held": held or {},
+    }
     (out_dir / "tuned_params.json").write_text(json.dumps(payload, indent=2) + "\n")
 
 
@@ -227,7 +272,14 @@ def _append_history(rows, out_dir: Path) -> None:
 
 
 def _write_report(
-    rows, cfg: Config, cut: dt.date, n_train: int, n_test: int, out_dir: Path
+    rows,
+    cfg: Config,
+    cut: dt.date,
+    n_train: int,
+    n_test: int,
+    out_dir: Path,
+    promoted: dict[str, dict] | None = None,
+    held: dict[str, str] | None = None,
 ) -> Path:
     out_dir.mkdir(exist_ok=True)
     _shrinkage_chart(rows, out_dir / "tuning_shrinkage.png")
@@ -246,6 +298,17 @@ def _write_report(
             }
             for r in rows
         ]
+    )
+
+    gate_rows = [
+        {"strategy": STRATEGIES[k][0], "live": "✓ trades as `_tuned`", "why": "passed"}
+        for k in (promoted or {})
+    ] + [
+        {"strategy": STRATEGIES[k][0], "live": "held back", "why": why}
+        for k, why in (held or {}).items()
+    ]
+    gate_md = (
+        _md_table(pd.DataFrame(gate_rows)) if gate_rows else "_No tunable strategies this run._"
     )
 
     body = f"""# Parameter tuning — train/test split
@@ -269,6 +332,19 @@ than {MIN_TRAIN_TRADES} train trades are discarded as noise.
   held-out sessions — the bar tuning has to beat to claim any value.
 - With ~{n_test} test sessions this is still a small sample; treat survivors as
   candidates for paper trading, not conclusions.
+
+## Live promotion (survivor gate)
+
+A tuned set trades live as `<strategy>_tuned` only once it has been the grid's
+winner with **identical parameters** and has **beaten the defaults on the held-out
+split** in each of the last {PROMOTE_RUNS} weekly runs. Everything else keeps
+trading on defaults only.
+
+{gate_md}
+
+Consecutive runs share most of their 60-day window, so passing shows the result
+*persists*, not that it's independently confirmed — the live `_tuned` vs default
+comparison in the paper journal is the real test.
 """
     path = out_dir / "TUNING.md"
     path.write_text(body)

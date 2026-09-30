@@ -105,6 +105,29 @@ def write_report(
     exits.index = [STRATEGIES[k][0] for k in exits.index]
     exits = exits.reset_index(names="strategy")
 
+    sides_md = ""
+    if "side" in trades.columns:
+        g = trades.groupby(["strategy", "side"])["pnl"]
+        by_side = pd.DataFrame({"n": g.size(), "exp": g.mean(), "pnl": g.sum()}).unstack("side")
+        side_rows = []
+        for key in [k for k in STRATEGIES if k in by_side.index]:
+            row = {"strategy": STRATEGIES[key][0]}
+            for side in ("long", "short"):
+                n = by_side.get(("n", side), pd.Series(dtype=float)).get(key)
+                row[f"{side} trades"] = 0 if pd.isna(n) else int(n)
+                row[f"{side} exp./trade"] = (
+                    "—" if pd.isna(n) else f"${by_side[('exp', side)][key]:+.2f}"
+                )
+            side_rows.append(row)
+        sides_md = f"""
+## Long vs short, per strategy
+
+{_md_table(pd.DataFrame(side_rows))}
+
+Each side read as its own book. The walk-forward version of this question — with
+the live long-gate policy scored against random selection — is in REGIME.md.
+"""
+
     start, end = trades["date"].min(), trades["date"].max()
     if "side" in trades.columns:
         n_long = int((trades["side"] == "long").sum())
@@ -135,7 +158,7 @@ wins / gross losses, >1 is profitable) and **expectancy** (avg $ per trade).
 
 `stop` = protective stop hit · `target` = fixed take-profit hit ·
 `signal` = strategy's own exit rule · `eod` = flattened at the session cutoff.
-
+{sides_md}
 Full trade-by-trade log: [trades.csv](trades.csv).
 
 *Small sample (yfinance caps 5-minute history at 60 days), one market regime,

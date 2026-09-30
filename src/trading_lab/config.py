@@ -20,6 +20,14 @@ class Config:
     # otherwise stack 10x notional in one symbol (PLTR, 2026-09-17). ~3 trades'
     # worth keeps a little agreement while bounding single-symbol exposure.
     max_symbol_notional: float = 30_000.0
+    # Long-side gate for live paper trading. Longs were the lab's one
+    # significant live finding (journal to 2026-09-29: 377 longs at -$15.26/
+    # trade, 95% CI excluding zero; shorts ~flat). "regime": a long entry is
+    # taken only when the regime filter scores it EV > 0. "none": longs trade
+    # unfiltered. Shorts are never gated. Exempt strategies keep the old
+    # behaviour — ORB stays untouched as the closest thing to a signal.
+    long_gate: str = "regime"
+    long_gate_exempt: tuple[str, ...] = ("orb",)
     entry_cutoff: str = "15:30"  # no new entries at/after this bar (US/Eastern)
     eod_cutoff: str = "15:55"  # flatten everything at/after this bar (US/Eastern)
     # Volatility-scaled risk (opt-in experiment, off by default). When on:

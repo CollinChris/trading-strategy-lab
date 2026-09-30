@@ -48,6 +48,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier, export_text
 
+from .config import Config
 from .data import market_today
 from .report import BASELINE, GRID, INK, INK_2, MUTED, STRATEGIES, SURFACE, _md_table
 
@@ -482,6 +483,47 @@ def quintile_table(scored: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def side_policies(
+    scored: pd.DataFrame, exempt: tuple[str, ...], n_random: int = 2000
+) -> pd.DataFrame:
+    """Walk-forward OOS books built by side: the question the live journal
+    raised (longs lose, shorts ~flat) tested on the backtest window, with the
+    live long-gate policy scored the same honest way as the filter itself."""
+    is_long = scored["side"].eq("long")
+    exempt_mask = base_name(scored["strategy"]).isin(exempt)
+    books = {
+        "Unfiltered, both sides": np.ones(len(scored), dtype=bool),
+        "Long only (unfiltered)": is_long.to_numpy(),
+        "Short only (unfiltered)": (~is_long).to_numpy(),
+        "Filter on every trade (`_regime` variants)": scored["keep"].to_numpy(),
+        "Live policy: shorts unfiltered, longs only when EV > 0, " + "/".join(exempt) + " exempt": (
+            (~is_long) | scored["keep"] | exempt_mask
+        ).to_numpy(),
+    }
+    pnl = scored["pnl"].to_numpy(dtype=float)
+    rows = []
+    for seed, (label, mask) in enumerate(books.items(), start=100):
+        st = _stats(pd.Series(pnl[mask]))
+        draws = (
+            random_baseline(pnl, int(mask.sum()), n_random, seed=seed)
+            if 0 < mask.sum() < len(pnl)
+            else np.array([])
+        )
+        rows.append(
+            {
+                "book": label,
+                "trades": st["trades"],
+                "exp./trade": _fmt_money(st["expectancy"]),
+                "profit factor": _fmt_pf(st["profit_factor"]),
+                "P&L": _fmt_money(st["pnl"]),
+                "pctile vs random same-size": (
+                    "—" if not len(draws) else f"{percentile_of(st['expectancy'], draws):.0f}"
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def _fmt_money(v: float) -> str:
     return "—" if pd.isna(v) else f"${v:+,.2f}"
 
@@ -803,6 +845,15 @@ something other than what pays.
 ⚠ = fewer than {MIN_FOLD_TRADES} kept trades; noise, not evidence. "pctile vs random" is where
 the filtered expectancy lands among 2,000 random subsets of the same size (≥95 = the selection
 is doing something chance rarely does).
+
+## Long vs short — side policies, out-of-sample only ({KINDS[primary.kind]})
+
+{_md_table(side_policies(primary.scored, Config().long_gate_exempt))}
+
+The live paper scanner runs the last row (`long_gate="regime"`). "Long only" /
+"Short only" answer whether one side alone carries the losses; the live policy
+is only worth keeping if it beats the unfiltered book *and* sits well above
+random same-size selection. Unlike the paper journal, these are backtest fills.
 
 ## Fold by fold — {KINDS[primary.kind]}
 

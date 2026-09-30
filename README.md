@@ -330,6 +330,11 @@ filters (`trading-lab regime`, above) learn from.
 - [x] v0.8 — the regime filter goes live: `<name>_regime` variants trade only the
       signals the filter keeps, every journal row carries `regime_ev`, and the
       Saturday workflow re-fits the model as the window rolls
+- [x] v0.9 — **survivor gate** on tuning: a tuned set trades live only after identical
+      winning params beat the defaults held-out 3 weekly runs running (weekly winners
+      had churned 2-3× in 4 runs and tuned variants lost more live than defaults);
+      **long gate**: live longs need regime EV > 0, shorts untouched, ORB exempt;
+      side-policy books scored walk-forward in REGIME.md, per-side split in RESULTS.md
 - [ ] Judge the live regime book once ~100 `_regime` fills exist: kept vs skipped
       expectancy on real fills, against the walk-forward numbers
 - [ ] Longer history + true gappers via Alpaca's historical minute data

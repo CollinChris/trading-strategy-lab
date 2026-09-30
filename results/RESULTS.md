@@ -1,6 +1,6 @@
 # Backtest results
 
-Generated 2026-09-26 · window **2026-07-02 → 2026-09-25** ·
+Generated 2026-09-30 · window **2026-07-02 → 2026-09-25** ·
 symbols **TSLA, NVDA, AMD, PLTR, COIN, MSTR** · bars **5m** ·
 **$10,000** per trade · slippage **5 bps/side** ·
 **1667 long / 1391 short**, everything flat by 15:55 ET.
@@ -41,6 +41,23 @@ wins / gross losses, >1 is profitable) and **expectancy** (avg $ per trade).
 
 `stop` = protective stop hit · `target` = fixed take-profit hit ·
 `signal` = strategy's own exit rule · `eod` = flattened at the session cutoff.
+
+## Long vs short, per strategy
+
+| strategy | long trades | long exp./trade | short trades | short exp./trade |
+|---|---|---|---|---|
+| Gap & Go | 8 | $+108.05 | 4 | $-43.91 |
+| Opening Range Breakout | 166 | $+16.26 | 145 | $-19.20 |
+| VWAP Pullback | 221 | $-20.31 | 220 | $-20.61 |
+| EMA 9/20 Crossover | 189 | $-22.38 | 184 | $-11.67 |
+| RSI(2) Reversion | 395 | $-10.30 | 323 | $-13.86 |
+| News Momentum | 28 | $-36.57 | 17 | $-9.53 |
+| Squeeze Breakout | 155 | $-31.32 | 103 | $-25.46 |
+| High-Break ATR Trail | 145 | $-8.33 | 117 | $-52.38 |
+| AR Forecast | 360 | $-3.69 | 278 | $-7.10 |
+
+Each side read as its own book. The walk-forward version of this question — with
+the live long-gate policy scored against random selection — is in REGIME.md.
 
 Full trade-by-trade log: [trades.csv](trades.csv).
 

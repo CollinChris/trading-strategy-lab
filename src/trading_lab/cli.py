@@ -46,6 +46,12 @@ def main() -> None:
     pp.add_argument(
         "--vol-sizing", action="store_true", help="ATR stops + fixed dollar risk per trade"
     )
+    pp.add_argument(
+        "--long-gate",
+        choices=["regime", "none"],
+        default=Config().long_gate,
+        help="regime: longs trade only when the regime filter's EV > 0 (ORB exempt)",
+    )
     pp.add_argument("--flatten", action="store_true", help="close all paper positions/orders")
     pp.add_argument("--status", action="store_true", help="show paper positions and open orders")
 
@@ -103,7 +109,8 @@ def main() -> None:
         elif args.status:
             paper.status()
         else:
-            paper.scan_and_trade(Config(vol_sizing=args.vol_sizing), dry_run=args.dry_run)
+            cfg = Config(vol_sizing=args.vol_sizing, long_gate=args.long_gate)
+            paper.scan_and_trade(cfg, dry_run=args.dry_run)
 
     elif args.command == "journal":
         from . import paper
