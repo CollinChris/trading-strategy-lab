@@ -1,23 +1,14 @@
 {
-  "generated": "2026-09-30",
+  "generated": "2026-10-03",
   "promotion_rule": "identical winning params + beat defaults held-out, last 3 runs",
-  "strategies": {
-    "rsi2_reversion": {
-      "params": {
-        "entry_level": 10.0,
-        "exit_level": 70.0,
-        "stop_pct": 0.02
-      },
-      "train_expectancy": -10.33,
-      "test_expectancy": -9.34
-    }
-  },
+  "strategies": {},
   "held": {
-    "orb": "best parameters changed within the last 3 runs",
+    "orb": "did not beat the defaults on held-out data in all 3 runs",
     "vwap_pullback": "best parameters changed within the last 3 runs",
     "ema_crossover": "best parameters changed within the last 3 runs",
+    "rsi2_reversion": "best parameters changed within the last 3 runs",
     "news_momentum": "best parameters changed within the last 3 runs",
-    "squeeze_breakout": "best parameters changed within the last 3 runs",
+    "squeeze_breakout": "did not beat the defaults on held-out data in all 3 runs",
     "high_break_trail": "best parameters changed within the last 3 runs",
     "ar_forecast": "best parameters changed within the last 3 runs"
   }
