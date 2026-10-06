@@ -19,6 +19,7 @@ import datetime as dt
 import json
 import os
 import time
+from collections import defaultdict
 from pathlib import Path
 
 import pandas as pd
@@ -106,9 +107,76 @@ def _long_gated(cfg: Config, strategy_name: str, side: str, have_filter: bool) -
     )
 
 
+def _net_fills_since(orders, since: dt.datetime) -> dict[str, float]:
+    """Signed shares filled per symbol at/after `since` (+ buys, - sells),
+    including bracket legs. Filters on fill time, not submission time, so an
+    order queued yesterday that filled at today's open counts as today."""
+    net: dict[str, float] = defaultdict(float)
+
+    def visit(o) -> None:
+        if o.filled_at is not None and o.filled_at >= since and float(o.filled_qty or 0) > 0:
+            sign = -1.0 if "SELL" in str(o.side).upper() else 1.0
+            net[o.symbol] += sign * float(o.filled_qty)
+        for leg in o.legs or []:
+            visit(leg)
+
+    for o in orders:
+        visit(o)
+    return net
+
+
+def close_stale_positions(client) -> int:
+    """Close any shares held over from a previous session — the safety net for
+    a missed EOD flatten (2026-10-05: a GitHub Actions outage cancelled the
+    15:40 flatten and four positions sat overnight with no stops, because the
+    bracket legs are DAY orders). Today's own positions are left alone: the
+    stale part of a position is what it held at today's open, i.e. current
+    shares minus everything filled since midnight ET. Called at the start of
+    every in-session scan, so the first scan that gets a runner cleans up.
+    """
+    from alpaca.trading.enums import QueryOrderStatus
+    from alpaca.trading.requests import ClosePositionRequest, GetOrdersRequest
+
+    positions = client.get_all_positions()
+    if not positions:
+        return 0
+    day_start = dt.datetime.combine(market_today(), dt.time(0, 0), tzinfo=MARKET_TZ)
+    orders = client.get_orders(
+        GetOrdersRequest(
+            status=QueryOrderStatus.CLOSED,
+            after=day_start - dt.timedelta(days=3),  # catch orders queued earlier
+            limit=500,
+            nested=True,
+        )
+    )
+    net_today = _net_fills_since(orders, day_start)
+    closed = 0
+    for p in positions:
+        cur = float(p.qty)
+        at_open = cur - net_today.get(p.symbol, 0.0)
+        if at_open * cur <= 0:  # nothing held over, or the side flipped today
+            continue
+        stale = round(min(abs(at_open), abs(cur)))
+        if stale < 1:
+            continue
+        try:
+            client.close_position(p.symbol, close_options=ClosePositionRequest(qty=str(stale)))
+        except Exception as exc:  # one stuck symbol must not block the scan
+            print(f"[stale] could not close {stale} {p.symbol}: {exc}")
+            continue
+        print(f"[stale] closed {stale} {p.symbol} held over from a previous session")
+        closed += 1
+    return closed
+
+
 def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     """One pass: signal on the latest completed bar -> bracket market order."""
     now_et = dt.datetime.now(tz=MARKET_TZ)
+    client = None if dry_run else _client()
+    # Before the entry-window check, so the 09:30 scan cleans up at the open.
+    if client is not None and client.get_clock().is_open:
+        close_stale_positions(client)
+
     entry_cutoff = dt.time.fromisoformat(cfg.entry_cutoff)
     if not dt.time(9, 35) <= now_et.time() < entry_cutoff:
         print(
@@ -133,7 +201,6 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
         if spy is not None and not spy.empty:
             spy_date, spy_day, _ = split_days(spy)[-1]
             spy_today = spy_day if spy_date.isoformat() == today else None
-    client = None if dry_run else _client()
     placed = 0
 
     # Per-symbol exposure cap, seeded from positions already open today so it

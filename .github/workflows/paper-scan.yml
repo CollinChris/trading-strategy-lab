@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: paper-trading
+  group: paper-scan
   cancel-in-progress: false
 
 jobs:

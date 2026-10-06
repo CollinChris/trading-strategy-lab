@@ -54,6 +54,11 @@ def main() -> None:
     )
     pp.add_argument("--flatten", action="store_true", help="close all paper positions/orders")
     pp.add_argument("--status", action="store_true", help="show paper positions and open orders")
+    pp.add_argument(
+        "--close-stale",
+        action="store_true",
+        help="close only positions held over from a previous session (market must be open)",
+    )
 
     sub.add_parser(
         "journal", help="append today's filled paper trades to results/paper_journal.csv"
@@ -108,6 +113,14 @@ def main() -> None:
             paper.flatten()
         elif args.status:
             paper.status()
+        elif args.close_stale:
+            client = paper._client()
+            if client.get_clock().is_open:
+                print(f"Closed stale positions in {paper.close_stale_positions(client)} symbol(s).")
+            else:
+                print(
+                    "Market closed — stale positions are closed by the first scan after the open."
+                )
         else:
             cfg = Config(vol_sizing=args.vol_sizing, long_gate=args.long_gate)
             paper.scan_and_trade(cfg, dry_run=args.dry_run)

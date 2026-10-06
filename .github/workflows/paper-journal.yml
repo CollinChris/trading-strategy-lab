@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: paper-trading
+  group: results-commit
   cancel-in-progress: false
 
 jobs:

@@ -6,6 +6,12 @@ name: Paper flatten (EOD)
 # late fallback run (GitHub cron can fire 15-25 min late) is harmless instead
 # of leaking overnight positions via un-fillable after-hours orders — the bug
 # on 2026-09-17. The 20:40 run is the EST-season safety net (a summer no-op).
+# If every flatten slot is lost (2026-10-05: a GitHub Actions outage cancelled
+# them all, leaving four positions overnight with no stops), each in-session
+# paper scan closes any shares held over from a previous session first thing,
+# so leftovers are cleared at the next open rather than the next 15:40.
+# Own concurrency group: GitHub keeps one pending run per group, and a shared
+# group let a queued scan cancel a pending flatten.
 on:
   schedule:
     - cron: "40 19 * * 1-5"
@@ -13,7 +19,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: paper-trading
+  group: paper-flatten
   cancel-in-progress: false
 
 jobs:
