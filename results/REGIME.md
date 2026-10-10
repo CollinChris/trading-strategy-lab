@@ -1,22 +1,22 @@
 # Regime filters — learned from the journal, validated walk-forward
 
-Generated 2026-10-03 · 60 sessions (2026-07-10 → 2026-10-02) ·
+Generated 2026-10-10 · 60 sessions (2026-07-17 → 2026-10-09) ·
 **walk-forward:** first 20 sessions train-only, then blocks of 5 sessions scored by a
 model trained on every session before them · **40 out-of-sample sessions** · decision rule:
 keep a trade when its predicted expected value is positive (classifiers: P(win)·avg_win +
 (1−P(win))·avg_loss with averages from the training fold; regressors: predicted P&L) ·
 "random same-size" = mean expectancy of 2,000 random subsets with the same trade count.
 
-**Gate met on this window (pending paper confirmation).** The Gradient boosting → P&L directly filter's kept trades have positive out-of-sample expectancy ($+5.32/trade) and sit at the 99th percentile of same-size random selections — the model is selecting on regime, not luck.
+**Gate met on this window (pending paper confirmation).** The Gradient boosting → P&L directly filter's kept trades have positive out-of-sample expectancy ($+5.44/trade) and sit at the 98th percentile of same-size random selections — the model is selecting on regime, not luck.
 
 ## Models
 
 | model | OOS trades | kept | exp./trade, all | exp./trade, kept | PF all → kept | random same-size | pctile vs random |
 |---|---|---|---|---|---|---|---|
-| Gradient boosting → P&L directly | 2023 | 191 (9%) | $-11.32 | $+5.32 | 0.71 → 1.16 | $-11.11 | 99 |
-| Ridge regression → P&L directly | 2023 | 381 (19%) | $-11.32 | $+4.68 | 0.71 → 1.13 | $-11.33 | 100 |
-| Gradient boosting → P(win) → EV | 2023 | 251 (12%) | $-11.32 | $+8.20 | 0.71 → 1.16 | $-11.35 | 100 |
-| Logistic regression → P(win) → EV | 2023 | 156 (8%) | $-11.32 | $+4.10 | 0.71 → 1.06 | $-11.25 | 97 |
+| Gradient boosting → P&L directly | 2021 | 165 (8%) | $-10.26 | $+5.44 | 0.73 → 1.17 | $-10.05 | 98 |
+| Ridge regression → P&L directly | 2021 | 376 (19%) | $-10.26 | $+2.25 | 0.73 → 1.06 | $-10.23 | 100 |
+| Gradient boosting → P(win) → EV | 2021 | 275 (14%) | $-10.26 | $+3.91 | 0.73 → 1.08 | $-10.30 | 99 |
+| Logistic regression → P(win) → EV | 2021 | 172 (9%) | $-10.26 | $+9.75 | 0.73 → 1.18 | $-10.17 | 100 |
 
 ![OOS cumulative P&L with vs without the filter](regime_oos.png)
 
@@ -28,11 +28,11 @@ trade against the "random same-size" column, not the gap between the curves.*
 
 | predicted-EV quintile | trades | mean predicted EV | actual exp./trade | win rate |
 |---|---|---|---|---|
-| 1 (lowest) | 405 | $-64.79 | $-21.91 | 32% |
-| 2 | 404 | $-37.48 | $-15.01 | 34% |
-| 3 | 405 | $-25.29 | $-12.94 | 34% |
-| 4 | 404 | $-10.89 | $-5.00 | 42% |
-| 5 (highest) | 405 | $+4.38 | $-1.75 | 46% |
+| 1 (lowest) | 405 | $-65.42 | $-14.64 | 34% |
+| 2 | 404 | $-37.68 | $-16.51 | 32% |
+| 3 | 404 | $-24.56 | $-10.48 | 36% |
+| 4 | 404 | $-10.93 | $-6.15 | 43% |
+| 5 (highest) | 404 | $+2.04 | $-3.50 | 44% |
 
 A filter is only as good as this table is monotonic. If the top quintile does not
 out-earn the bottom one out of sample, the model has learned to rank trades by
@@ -42,16 +42,16 @@ something other than what pays.
 
 | strategy | OOS trades | kept | exp./trade, all | exp./trade, kept | PF all → kept | P&L all → kept | random same-size | pctile vs random |
 |---|---|---|---|---|---|---|---|---|
-| Gap & Go | 9 | 1 (11%) ⚠ | $+198.56 | $+424.16 | 5.47 → ∞ | $+1,787.03 → $+424.16 | $+208.82 | 78 |
-| Opening Range Breakout | 201 | 28 (14%) | $+4.39 | $+38.15 | 1.06 → 1.48 | $+881.52 → $+1,068.08 | $+3.69 | 83 |
-| VWAP Pullback | 300 | 0 (0%) ⚠ | $-23.92 | — | 0.56 → — | $-7,176.56 → $+0.00 | — | — |
-| EMA 9/20 Crossover | 265 | 0 (0%) ⚠ | $-14.65 | — | 0.60 → — | $-3,883.06 → $+0.00 | — | — |
-| RSI(2) Reversion | 465 | 118 (25%) | $-11.98 | $-8.60 | 0.40 → 0.56 | $-5,572.41 → $-1,014.82 | $-11.97 | 86 |
-| News Momentum | 27 | 0 (0%) ⚠ | $-22.82 | — | 0.51 → — | $-616.23 → $+0.00 | — | — |
-| Squeeze Breakout | 174 | 0 (0%) ⚠ | $-15.54 | — | 0.58 → — | $-2,703.37 → $+0.00 | — | — |
-| High-Break ATR Trail | 168 | 5 (3%) ⚠ | $-20.76 | $+108.73 | 0.66 → 2.37 | $-3,487.00 → $+543.65 | $-19.06 | 97 |
-| AR Forecast | 414 | 39 (9%) | $-5.17 | $-0.14 | 0.81 → 1.00 | $-2,139.00 → $-5.50 | $-4.78 | 69 |
-| **All strategies** | 2023 | 191 (9%) | $-11.32 | $+5.32 | 0.71 → 1.16 | $-22,909.08 → $+1,015.57 | $-11.11 | 99 |
+| Gap & Go | 8 | 1 (12%) ⚠ | $+257.58 | $+424.16 | 71.52 → ∞ | $+2,060.63 → $+424.16 | $+251.56 | 77 |
+| Opening Range Breakout | 194 | 15 (8%) | $+2.56 | $+54.38 | 1.03 → 1.75 | $+496.07 → $+815.71 | $+3.25 | 84 |
+| VWAP Pullback | 295 | 1 (0%) ⚠ | $-20.29 | $+112.82 | 0.61 → ∞ | $-5,986.50 → $+112.82 | $-24.16 | 88 |
+| EMA 9/20 Crossover | 263 | 0 (0%) ⚠ | $-12.87 | — | 0.63 → — | $-3,384.50 → $+0.00 | — | — |
+| RSI(2) Reversion | 467 | 96 (21%) | $-10.97 | $-9.16 | 0.41 → 0.52 | $-5,123.06 → $-879.72 | $-10.85 | 67 |
+| News Momentum | 32 | 0 (0%) ⚠ | $-22.10 | — | 0.54 → — | $-707.23 → $+0.00 | — | — |
+| Squeeze Breakout | 174 | 0 (0%) ⚠ | $-14.74 | — | 0.59 → — | $-2,564.29 → $+0.00 | — | — |
+| High-Break ATR Trail | 168 | 5 (3%) ⚠ | $-16.84 | $+35.64 | 0.71 → 1.37 | $-2,828.56 → $+178.18 | $-15.93 | 82 |
+| AR Forecast | 420 | 47 (11%) | $-6.41 | $+5.23 | 0.75 → 1.14 | $-2,691.18 → $+246.02 | $-6.45 | 92 |
+| **All strategies** | 2021 | 165 (8%) | $-10.26 | $+5.44 | 0.73 → 1.17 | $-20,728.62 → $+897.17 | $-10.05 | 98 |
 
 ⚠ = fewer than 10 kept trades; noise, not evidence. "pctile vs random" is where
 the filtered expectancy lands among 2,000 random subsets of the same size (≥95 = the selection
@@ -61,11 +61,11 @@ is doing something chance rarely does).
 
 | book | trades | exp./trade | profit factor | P&L | pctile vs random same-size |
 |---|---|---|---|---|---|
-| Unfiltered, both sides | 2023 | $-11.32 | 0.71 | $-22,909.08 | — |
-| Long only (unfiltered) | 1059 | $-12.80 | 0.70 | $-13,553.74 | 25 |
-| Short only (unfiltered) | 964 | $-9.70 | 0.73 | $-9,355.34 | 75 |
-| Filter on every trade (`_regime` variants) | 191 | $+5.32 | 1.16 | $+1,015.57 | 98 |
-| Live policy: shorts unfiltered, longs only when EV > 0, orb exempt | 1170 | $-6.98 | 0.83 | $-8,166.32 | 99 |
+| Unfiltered, both sides | 2021 | $-10.26 | 0.73 | $-20,728.62 | — |
+| Long only (unfiltered) | 1070 | $-11.82 | 0.71 | $-12,643.55 | 22 |
+| Short only (unfiltered) | 951 | $-8.50 | 0.76 | $-8,085.07 | 77 |
+| Filter on every trade (`_regime` variants) | 165 | $+5.44 | 1.17 | $+897.17 | 97 |
+| Live policy: shorts unfiltered, longs only when EV > 0, orb exempt | 1147 | $-6.23 | 0.84 | $-7,141.56 | 98 |
 
 The live paper scanner runs the last row (`long_gate="regime"`). "Long only" /
 "Short only" answer whether one side alone carries the losses; the live policy
@@ -76,14 +76,14 @@ random same-size selection. Unlike the paper journal, these are backtest fills.
 
 | fold | test sessions | train sessions | trades | kept | exp./trade, all | exp./trade, kept |
 |---|---|---|---|---|---|---|
-| 1 | 2026-08-07 → 2026-08-13 | 20 | 266 | 50 | $-23.29 | $-20.04 |
-| 2 | 2026-08-14 → 2026-08-20 | 25 | 261 | 16 | $-10.09 | $+55.48 |
-| 3 | 2026-08-21 → 2026-08-27 | 30 | 251 | 36 | $-16.06 | $-3.30 |
-| 4 | 2026-08-28 → 2026-09-03 | 35 | 249 | 28 | $+11.44 | $+40.35 |
-| 5 | 2026-09-04 → 2026-09-11 | 40 | 238 | 8 | $-7.52 | $-7.53 |
-| 6 | 2026-09-14 → 2026-09-18 | 45 | 250 | 17 | $-9.94 | $-25.03 |
-| 7 | 2026-09-21 → 2026-09-25 | 50 | 251 | 17 | $-20.11 | $+17.69 |
-| 8 | 2026-09-28 → 2026-10-02 | 55 | 257 | 19 | $-13.91 | $+16.00 |
+| 1 | 2026-08-14 → 2026-08-20 | 20 | 264 | 20 | $-10.42 | $+18.45 |
+| 2 | 2026-08-21 → 2026-08-27 | 25 | 253 | 36 | $-15.79 | $-10.59 |
+| 3 | 2026-08-28 → 2026-09-03 | 30 | 249 | 29 | $+11.10 | $+27.12 |
+| 4 | 2026-09-04 → 2026-09-11 | 35 | 238 | 16 | $-7.79 | $+13.83 |
+| 5 | 2026-09-14 → 2026-09-18 | 40 | 252 | 14 | $-10.32 | $-5.34 |
+| 6 | 2026-09-21 → 2026-09-25 | 45 | 250 | 18 | $-19.65 | $+43.63 |
+| 7 | 2026-09-28 → 2026-10-02 | 50 | 258 | 17 | $-15.03 | $-18.56 |
+| 8 | 2026-10-05 → 2026-10-09 | 55 | 257 | 15 | $-13.63 | $-32.90 |
 
 ## What the filter looks at
 
@@ -92,14 +92,14 @@ filtered expectancy falls when one feature is shuffled in the test fold.
 
 | feature | OOS expectancy drop when shuffled |
 |---|---|
-| aligned_trend_slope_pct | $+13.51 |
-| mkt_autocorr_1 | $+1.46 |
-| mkt_dist_vwap_pct | $+1.07 |
-| mkt_rel_volume | $+0.88 |
-| aligned_change_open_pct | $+0.75 |
-| mkt_atr_pct | $+0.60 |
-| is_short | $+0.00 |
-| aligned_spy_pct | $-0.84 |
+| mkt_trend_slope_pct | $+10.41 |
+| mkt_change_open_pct | $+9.48 |
+| aligned_trend_slope_pct | $+6.40 |
+| mkt_autocorr_1 | $+5.39 |
+| aligned_range_pos | $+3.37 |
+| hour_et | $+2.98 |
+| mkt_range_pos | $+2.74 |
+| aligned_change_open_pct | $+2.27 |
 
 Features prefixed `aligned_` are signed by trade direction (a short's SPY move is
 negated), so one pooled model can treat "long in a rising tape" and "short in a
@@ -108,10 +108,10 @@ falling tape" as the same regime.
 ## Paper-journal check (real fills, different execution path)
 
 A filter fitted only on backtest sessions before the paper loop's first fill
-(2026-08-24) was applied to the **608 real paper trades** from
-2026-08-24 to 2026-10-02. It kept 54; expectancy
-$-9.25 → $+43.49/trade
-(100th percentile vs same-size random selection). Small
+(2026-08-24) was applied to the **704 real paper trades** from
+2026-08-24 to 2026-10-09. It kept 51; expectancy
+$-11.60 → $+4.10/trade
+(80th percentile vs same-size random selection). Small
 sample — a direction check, not a verdict.
 
 ## Descriptive rules (in-sample, for reading — not evidence)
@@ -123,119 +123,122 @@ prove nothing; the walk-forward tables above are the evidence.
 **Opening Range Breakout**
 
 ```
-|--- mkt_change_open_pct <= 1.96
+|--- aligned_change_open_pct <= 1.48
 |   |--- aligned_range_pos <= -0.13
-|   |   |--- weights: [21.00, 30.00] class: 1
+|   |   |--- weights: [17.00, 19.00] class: 1
 |   |--- aligned_range_pos >  -0.13
-|   |   |--- weights: [132.00, 75.00] class: 0
-|--- mkt_change_open_pct >  1.96
-|   |--- aligned_range_pos <= 0.90
-|   |   |--- weights: [3.00, 23.00] class: 1
-|   |--- aligned_range_pos >  0.90
-|   |   |--- weights: [15.00, 9.00] class: 0
+|   |   |--- weights: [99.00, 41.00] class: 0
+|--- aligned_change_open_pct >  1.48
+|   |--- mkt_rel_volume <= 0.71
+|   |   |--- weights: [27.00, 48.00] class: 1
+|   |--- mkt_rel_volume >  0.71
+|   |   |--- weights: [34.00, 22.00] class: 0
 ```
 
 **VWAP Pullback**
 
 ```
-|--- mkt_atr_pct <= 0.54
-|   |--- mkt_gap_pct <= -0.35
-|   |   |--- weights: [38.00, 14.00] class: 0
-|   |--- mkt_gap_pct >  -0.35
-|   |   |--- weights: [47.00, 49.00] class: 1
-|--- mkt_atr_pct >  0.54
-|   |--- mkt_change_open_pct <= 2.24
-|   |   |--- weights: [210.00, 67.00] class: 0
-|   |--- mkt_change_open_pct >  2.24
-|   |   |--- weights: [8.00, 11.00] class: 1
+|--- mkt_realized_vol_pct <= 2.37
+|   |--- mkt_realized_vol_pct <= 2.24
+|   |   |--- weights: [69.00, 42.00] class: 0
+|   |--- mkt_realized_vol_pct >  2.24
+|   |   |--- weights: [4.00, 11.00] class: 1
+|--- mkt_realized_vol_pct >  2.37
+|   |--- aligned_change_open_pct <= 0.89
+|   |   |--- weights: [107.00, 25.00] class: 0
+|   |--- aligned_change_open_pct >  0.89
+|   |   |--- weights: [124.00, 61.00] class: 0
 ```
 
 **EMA 9/20 Crossover**
 
 ```
-|--- mkt_realized_vol_pct <= 4.40
-|   |--- mkt_rel_volume <= 0.47
-|   |   |--- weights: [81.00, 42.00] class: 0
-|   |--- mkt_rel_volume >  0.47
-|   |   |--- weights: [173.00, 44.00] class: 0
-|--- mkt_realized_vol_pct >  4.40
-|   |--- mkt_rel_volume <= 0.45
-|   |   |--- weights: [15.00, 6.00] class: 0
-|   |--- mkt_rel_volume >  0.45
-|   |   |--- weights: [7.00, 15.00] class: 1
+|--- mkt_realized_vol_pct <= 4.38
+|   |--- aligned_range_pos <= -0.54
+|   |   |--- weights: [7.00, 8.00] class: 1
+|   |--- aligned_range_pos >  -0.54
+|   |   |--- weights: [247.00, 82.00] class: 0
+|--- mkt_realized_vol_pct >  4.38
+|   |--- aligned_spy_pct <= -0.04
+|   |   |--- weights: [4.00, 12.00] class: 1
+|   |--- aligned_spy_pct >  -0.04
+|   |   |--- weights: [16.00, 9.00] class: 0
 ```
 
 **RSI(2) Reversion**
 
 ```
-|--- mkt_realized_vol_pct <= 1.45
-|   |--- aligned_change_open_pct <= 0.59
-|   |   |--- weights: [12.00, 6.00] class: 0
-|   |--- aligned_change_open_pct >  0.59
-|   |   |--- weights: [27.00, 1.00] class: 0
-|--- mkt_realized_vol_pct >  1.45
-|   |--- aligned_spy_pct <= 0.45
-|   |   |--- weights: [312.00, 268.00] class: 0
-|   |--- aligned_spy_pct >  0.45
-|   |   |--- weights: [29.00, 62.00] class: 1
+|--- mkt_realized_vol_pct <= 1.75
+|   |--- aligned_spy_pct <= -0.21
+|   |   |--- weights: [7.00, 11.00] class: 1
+|   |--- aligned_spy_pct >  -0.21
+|   |   |--- weights: [72.00, 18.00] class: 0
+|--- mkt_realized_vol_pct >  1.75
+|   |--- aligned_spy_pct <= 0.55
+|   |   |--- weights: [284.00, 259.00] class: 0
+|   |--- aligned_spy_pct >  0.55
+|   |   |--- weights: [20.00, 45.00] class: 1
 ```
 
 **News Momentum**
 
 ```
-|--- mkt_autocorr_1 <= 0.00
-|   |--- weights: [22.00, 5.00] class: 0
-|--- mkt_autocorr_1 >  0.00
-|   |--- weights: [8.00, 9.00] class: 1
+|--- mkt_autocorr_1 <= 0.07
+|   |--- mkt_realized_vol_pct <= 2.00
+|   |   |--- weights: [10.00, 6.00] class: 0
+|   |--- mkt_realized_vol_pct >  2.00
+|   |   |--- weights: [17.00, 1.00] class: 0
+|--- mkt_autocorr_1 >  0.07
+|   |--- weights: [6.00, 9.00] class: 1
 ```
 
 **Squeeze Breakout**
 
 ```
-|--- mkt_gap_pct <= 0.86
-|   |--- mkt_change_open_pct <= 3.82
-|   |   |--- weights: [111.00, 37.00] class: 0
-|   |--- mkt_change_open_pct >  3.82
-|   |   |--- weights: [24.00, 0.00] class: 0
-|--- mkt_gap_pct >  0.86
-|   |--- mkt_spy_change_pct <= -0.12
-|   |   |--- weights: [15.00, 22.00] class: 1
-|   |--- mkt_spy_change_pct >  -0.12
-|   |   |--- weights: [37.00, 13.00] class: 0
+|--- mkt_gap_pct <= 0.87
+|   |--- aligned_trend_slope_pct <= 0.03
+|   |   |--- weights: [95.00, 36.00] class: 0
+|   |--- aligned_trend_slope_pct >  0.03
+|   |   |--- weights: [40.00, 4.00] class: 0
+|--- mkt_gap_pct >  0.87
+|   |--- mkt_spy_change_pct <= -0.13
+|   |   |--- weights: [12.00, 21.00] class: 1
+|   |--- mkt_spy_change_pct >  -0.13
+|   |   |--- weights: [42.00, 15.00] class: 0
 ```
 
 **High-Break ATR Trail**
 
 ```
-|--- aligned_spy_pct <= -0.18
-|   |--- mkt_gap_pct <= 0.74
-|   |   |--- weights: [9.00, 6.00] class: 0
-|   |--- mkt_gap_pct >  0.74
-|   |   |--- weights: [3.00, 12.00] class: 1
-|--- aligned_spy_pct >  -0.18
-|   |--- mkt_gap_pct <= -1.15
-|   |   |--- weights: [53.00, 7.00] class: 0
-|   |--- mkt_gap_pct >  -1.15
-|   |   |--- weights: [114.00, 58.00] class: 0
+|--- aligned_spy_pct <= -0.17
+|   |--- mkt_atr_pct <= 0.74
+|   |   |--- weights: [12.00, 3.00] class: 0
+|   |--- mkt_atr_pct >  0.74
+|   |   |--- weights: [3.00, 15.00] class: 1
+|--- aligned_spy_pct >  -0.17
+|   |--- aligned_range_pos <= 0.98
+|   |   |--- weights: [140.00, 63.00] class: 0
+|   |--- aligned_range_pos >  0.98
+|   |   |--- weights: [23.00, 1.00] class: 0
 ```
 
 **AR Forecast**
 
 ```
-|--- aligned_change_open_pct <= 5.06
-|   |--- mkt_rel_volume <= 0.36
-|   |   |--- weights: [49.00, 16.00] class: 0
-|   |--- mkt_rel_volume >  0.36
-|   |   |--- weights: [300.00, 249.00] class: 0
-|--- aligned_change_open_pct >  5.06
-|   |--- weights: [2.00, 13.00] class: 1
+|--- aligned_change_open_pct <= 5.25
+|   |--- aligned_change_open_pct <= 3.60
+|   |   |--- weights: [327.00, 253.00] class: 0
+|   |--- aligned_change_open_pct >  3.60
+|   |   |--- weights: [21.00, 4.00] class: 0
+|--- aligned_change_open_pct >  5.25
+|   |--- weights: [3.00, 13.00] class: 1
 ```
 
 
 ## The live filter
 
 `regime_model.joblib` — Gradient boosting → P&L directly, fitted on all 60 sessions
-(3057 trades). The paper scanner scores every base-strategy signal with it and
+(3058 trades). The paper scanner scores every base-strategy signal with it and
 places a second order tagged `<strategy>_regime` only when predicted EV > 0, so
 `paper_journal.csv` accumulates a live filtered-vs-unfiltered comparison; every journal row also
 carries `regime_ev`, the filter's verdict at entry. Re-fitted each Saturday as the window rolls.

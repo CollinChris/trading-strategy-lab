@@ -1,21 +1,21 @@
 # Parameter tuning — train/test split
 
-Generated 2026-10-03 · optimized on the first **36 sessions**
-(before 2026-08-31), validated on the held-out **24 sessions** · objective:
+Generated 2026-10-10 · optimized on the first **36 sessions**
+(before 2026-09-08), validated on the held-out **24 sessions** · objective:
 **expectancy per trade** (never win rate — see v0.1) · parameter sets with fewer
 than 20 train trades are discarded as noise.
 
 | strategy | best params (train) | train exp./trade | test exp./trade | test exp. (defaults) | test trades | test win rate | test P&L |
 |---|---|---|---|---|---|---|---|
-| Gap & Go | n/a (too few trades) | — | — | $+176.27 | 3 | — | — |
-| Opening Range Breakout | {'range_bars': 3, 'target_r': 2.0, 'stop_at_mid': False} | $-0.74 | $+10.35 | $+10.35 | 115 | 42.6% | $+1,190 |
-| VWAP Pullback | {'target_r': 2.0, 'stop_buffer': 0.997} | $-19.57 | $-28.74 | $-28.74 | 178 | 30.3% | $-5,115 |
-| EMA 9/20 Crossover | {'fast': 5, 'slow': 13, 'stop_bars': 5} | $-12.12 | $-23.91 | $-18.54 | 236 | 19.1% | $-5,643 |
-| RSI(2) Reversion | {'entry_level': 10.0, 'exit_level': 70.0, 'stop_pct': 0.005} | $-11.66 | $-10.84 | $-10.15 | 269 | 46.5% | $-2,916 |
-| News Momentum | {'window_min': 60, 'vol_mult': 1.5, 'target_r': 3.0} | $-15.36 | $-30.58 | $-29.49 | 24 | 29.2% | $-734 |
-| Squeeze Breakout | {'bw_lookback': 12, 'target_r': 1.5} | $-28.63 | $-4.56 | $-4.25 | 104 | 39.4% | $-474 |
-| High-Break ATR Trail | {'window_bars': 6, 'trail_atr_mult': 3.0} | $-19.79 | $-11.87 | $-9.03 | 122 | 41.8% | $-1,448 |
-| AR Forecast | {'lags': 6, 'horizon': 3, 'threshold': 0.002} | $-3.98 | $-12.85 | $-3.73 | 99 | 39.4% | $-1,273 |
+| Gap & Go | n/a (too few trades) | — | — | $+98.11 | 2 | — | — |
+| Opening Range Breakout | {'range_bars': 3, 'target_r': 2.0, 'stop_at_mid': False} | $+1.51 | $-13.62 | $-13.62 | 113 | 37.2% | $-1,539 |
+| VWAP Pullback | {'target_r': 1.5, 'stop_buffer': 0.995} | $-14.99 | $-31.65 | $-27.88 | 155 | 33.5% | $-4,905 |
+| EMA 9/20 Crossover | {'fast': 9, 'slow': 20, 'stop_bars': 5} | $-9.24 | $-13.54 | $-13.54 | 177 | 27.7% | $-2,396 |
+| RSI(2) Reversion | {'entry_level': 15.0, 'exit_level': 50.0, 'stop_pct': 0.005} | $-11.99 | $-8.21 | $-8.66 | 387 | 42.4% | $-3,176 |
+| News Momentum | {'window_min': 60, 'vol_mult': 1.2, 'target_r': 1.5} | $-19.40 | $-14.49 | $-14.46 | 52 | 34.6% | $-753 |
+| Squeeze Breakout | {'bw_lookback': 12, 'target_r': 1.5} | $-18.61 | $-11.01 | $-12.52 | 111 | 36.9% | $-1,222 |
+| High-Break ATR Trail | {'window_bars': 6, 'trail_atr_mult': 1.5} | $-15.03 | $-20.62 | $-29.51 | 121 | 32.2% | $-2,495 |
+| AR Forecast | {'lags': 12, 'horizon': 6, 'threshold': 0.002} | $-1.59 | $-6.44 | $-5.24 | 202 | 42.6% | $-1,300 |
 
 ![Train vs test expectancy](tuning_shrinkage.png)
 

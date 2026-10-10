@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-03",
+  "generated": "2026-10-10",
   "promotion_rule": "identical winning params + beat defaults held-out, last 3 runs",
   "strategies": {},
   "held": {
