@@ -1,9 +1,9 @@
 {
-  "generated": "2026-10-10",
+  "generated": "2026-10-17",
   "promotion_rule": "identical winning params + beat defaults held-out, last 3 runs",
   "strategies": {},
   "held": {
-    "orb": "did not beat the defaults on held-out data in all 3 runs",
+    "orb": "best parameters changed within the last 3 runs",
     "vwap_pullback": "best parameters changed within the last 3 runs",
     "ema_crossover": "best parameters changed within the last 3 runs",
     "rsi2_reversion": "best parameters changed within the last 3 runs",

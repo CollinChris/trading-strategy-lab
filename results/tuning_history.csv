@@ -53,3 +53,12 @@ run_date,strategy,best_params,train_expectancy,test_expectancy,default_test_expe
 2026-10-10,Squeeze Breakout,"{'bw_lookback': 12, 'target_r': 1.5}",-18.61,-11.01,-12.52,111
 2026-10-10,High-Break ATR Trail,"{'window_bars': 6, 'trail_atr_mult': 1.5}",-15.03,-20.62,-29.51,121
 2026-10-10,AR Forecast,"{'lags': 12, 'horizon': 6, 'threshold': 0.002}",-1.59,-6.44,-5.24,202
+2026-10-17,Gap & Go,n/a (too few trades),,,181.03,2
+2026-10-17,Opening Range Breakout,"{'range_bars': 3, 'target_r': 3.0, 'stop_at_mid': False}",-3.81,-14.13,-6.65,115
+2026-10-17,VWAP Pullback,"{'target_r': 3.0, 'stop_buffer': 0.997}",-17.6,-2.0,-10.15,174
+2026-10-17,EMA 9/20 Crossover,"{'fast': 9, 'slow': 20, 'stop_bars': 5}",-7.11,-17.43,-17.43,161
+2026-10-17,RSI(2) Reversion,"{'entry_level': 10.0, 'exit_level': 50.0, 'stop_pct': 0.01}",-10.18,-8.81,-8.36,260
+2026-10-17,News Momentum,"{'window_min': 60, 'vol_mult': 1.2, 'target_r': 1.5}",-15.98,-15.72,-22.55,59
+2026-10-17,Squeeze Breakout,"{'bw_lookback': 12, 'target_r': 1.5}",-17.76,-4.06,-7.33,113
+2026-10-17,High-Break ATR Trail,"{'window_bars': 6, 'trail_atr_mult': 1.5}",-15.95,1.88,-2.83,124
+2026-10-17,AR Forecast,"{'lags': 6, 'horizon': 12, 'threshold': 0.001}",-3.55,-13.67,-7.83,277
