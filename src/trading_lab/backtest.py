@@ -20,6 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+from . import market
 from .config import Config
 from .data import load_bars, load_news, split_days
 from .indicators import atr, session_vwap
@@ -75,6 +76,11 @@ class Trade:
     mkt_range_pos: float = float("nan")  # entry inside day-so-far range (0=low, 1=high)
     hour_et: float = float("nan")  # entry hour (US/Eastern, decimal)
     weekday: str = ""
+    # Market adjustment (see market.py): the same trade with an opposite,
+    # beta-weighted SPY hedge over its hold. NaN when SPY bars are missing.
+    beta: float = float("nan")
+    spy_ret_pct: float = float("nan")
+    pnl_vs_spy: float = float("nan")
 
 
 def entry_conditions(
@@ -155,6 +161,7 @@ def run_symbol_day(
     prior_close: float | None,
     cfg: Config,
     spy_day: pd.DataFrame | None = None,
+    beta: float = 1.0,
 ) -> list[Trade]:
     strategy.symbol = symbol
     strategy.new_day(day, prior_close)
@@ -173,6 +180,10 @@ def run_symbol_day(
 
     def close(pos_: _Open, ts: pd.Timestamp, price: float, why: str) -> None:
         pnl = (price - pos_.entry_price) * pos_.qty * pos_.direction
+        spy_ret = market.spy_return(spy_day, pos_.entry_time, ts) if spy_day is not None else None
+        adj = market.adjusted_pnl(
+            pnl, pos_.direction, pos_.qty * pos_.entry_price, beta, spy_ret, cfg.hedge_slippage_bps
+        )
         trades.append(
             Trade(
                 strategy=strategy.name,
@@ -190,6 +201,9 @@ def run_symbol_day(
                 entry_reason=pos_.reason,
                 exit_reason=why,
                 **pos_.conditions,
+                beta=round(beta, 3),
+                spy_ret_pct=round(spy_ret * 100, 4) if spy_ret is not None else float("nan"),
+                pnl_vs_spy=round(adj, 2) if adj is not None else float("nan"),
             )
         )
 
@@ -280,8 +294,10 @@ def run_on(
     session dates (prior closes still come from the full series, so a filtered
     day keeps its true previous-session close)."""
     trades: list[Trade] = []
+    spy_all = pd.concat(spy_by_date[d] for d in sorted(spy_by_date)) if spy_by_date else None
     for symbol, bars in bars_by_symbol.items():
         days = split_days(bars)
+        beta = market.beta(bars, spy_all) if spy_all is not None else 1.0
         for strategy in make_strategies():
             strategy.symbol = symbol
             for date, day, prior_close in days:
@@ -293,7 +309,7 @@ def run_on(
                     continue
                 spy_day = spy_by_date.get(date) if spy_by_date else None
                 trades.extend(
-                    run_symbol_day(strategy, symbol, date, day, prior_close, cfg, spy_day)
+                    run_symbol_day(strategy, symbol, date, day, prior_close, cfg, spy_day, beta)
                 )
     frame = pd.DataFrame([t.__dict__ for t in trades])
     if not frame.empty:

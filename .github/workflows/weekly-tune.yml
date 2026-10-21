@@ -1,13 +1,14 @@
-name: Weekly tune
+name: Weekly backtest + monthly tune
 
-# Saturday, after the trading week, on the rolling 60-day window:
-#   1. tune  — grid-search parameters; commit TUNING.md + a row per strategy to
-#      results/tuning_history.csv (week-over-week stability: persist or churn?)
-#   2. backtest — refresh results/trades.csv so the regime filter sees the
-#      newest sessions (the window drops a week and gains a week)
-#   3. regime — walk-forward report + re-fit the live filter
-#      (results/regime_model.joblib) the paper scanner trades as `_regime`
-#      variants next week.
+# Every Saturday, on the rolling 60-day window:
+#   - backtest: refresh results/trades.csv (now with SPY-adjusted P&L) and
+#     results/REVIEW.md, the "is anything beating the market?" report.
+# First Saturday of each month only (or on manual dispatch):
+#   - tune: grid search scored on SPY-adjusted expectancy, report-only. Weekly
+#     winners churned 4-5 times in 7 runs, so promotion to live trading is off
+#     (config.trade_tuned_variants) and weekly runs only added noise.
+#   - regime: walk-forward report + live model, kept for monitoring; regime
+#     variants are off (config.trade_regime_variants).
 # Not time-critical, so GitHub's best-effort cron is fine here — no external
 # cron-job.org slot needed (see docs/external-cron.md).
 on:
@@ -23,14 +24,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  tune:
+  refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 90  # a full tune took ~46 min locally; runners are slower
+    timeout-minutes: 150  # monthly tune over 10 symbols is the long pole
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --frozen
-      - name: Tune on the rolling 60-day window
+      - name: Monthly run? (first Saturday of the month, or manual)
+        id: when
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(date -u +%-d)" -le 7 ]; then
+            echo "monthly=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "monthly=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Tune on the rolling 60-day window (monthly, report-only)
+        if: steps.when.outputs.monthly == 'true'
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
@@ -40,15 +50,18 @@ jobs:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
         run: uv run trading-lab backtest
-      - name: Re-fit the regime filter (walk-forward report + live model)
+      - name: Re-fit the regime filter (monthly, monitoring only)
+        if: steps.when.outputs.monthly == 'true'
         run: uv run trading-lab regime
+      - name: Refresh the review (SPY-adjusted verdicts + decision gate)
+        run: uv run trading-lab review
       - name: Commit the tuning report, refreshed backtest, and regime filter
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add results/TUNING.md results/tuning_shrinkage.png results/tuning_history.csv results/tuned_params.json
           git add results/trades.csv results/RESULTS.md results/equity_curves.png
-          git add results/REGIME.md results/regime_oos.png results/regime_model.joblib
+          git add results/REGIME.md results/regime_oos.png results/regime_model.joblib results/REVIEW.md
           git diff --cached --quiet && echo "No weekly changes." && exit 0
-          git commit -m "weekly: tune + backtest refresh + regime re-fit $(date -u +%F)"
+          git commit -m "weekly: backtest + review refresh $(date -u +%F)"
           git push

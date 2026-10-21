@@ -63,6 +63,7 @@ def main() -> None:
     sub.add_parser(
         "journal", help="append today's filled paper trades to results/paper_journal.csv"
     )
+    sub.add_parser("review", help="write results/REVIEW.md: SPY-adjusted verdicts + decision gate")
 
     args = parser.parse_args()
 
@@ -129,6 +130,16 @@ def main() -> None:
         from . import paper
 
         paper.journal(Config())
+
+    elif args.command == "review":
+        from pathlib import Path
+
+        from .review import build
+
+        path = build(
+            Path("results/paper_journal.csv"), Path("results/trades.csv"), Path("results/REVIEW.md")
+        )
+        print(f"Review → {path}")
 
 
 if __name__ == "__main__":

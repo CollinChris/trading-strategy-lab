@@ -22,9 +22,11 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
+from . import market
 from .backtest import entry_conditions, load_spy_by_date, position_size
 from .config import Config
 from .data import MARKET_TZ, load_bars, load_news, market_today, split_days
@@ -190,8 +192,9 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
 
     bars_by_symbol = load_bars(cfg.symbols, cfg.interval, period="5d", on_missing="skip")
     news = load_news(cfg.symbols, cfg.interval, period="3d")
-    tuned = _load_tuned()
-    regime = _load_regime()
+    tuned = _load_tuned() if cfg.trade_tuned_variants else {}
+    needs_regime = cfg.trade_regime_variants or cfg.long_gate == "regime"
+    regime = _load_regime() if needs_regime else None
     if cfg.long_gate == "regime" and regime is None:
         print("warning: long gate is on but no regime filter is loaded — longs trade unfiltered")
     spy_today = None
@@ -275,7 +278,7 @@ def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
             # Tuned variants don't get one — keep the live A/B two-way — and
             # neither do gated longs: the base order already IS the filtered trade.
             orders = [(strategy.name, tag, line)]
-            if ev is not None and not is_tuned and not gated:
+            if ev is not None and cfg.trade_regime_variants and not is_tuned and not gated:
                 if ev > 0:
                     rname = f"{strategy.name}_regime"
                     rtag = f"{rname}--{symbol}--{today}"
@@ -399,6 +402,47 @@ def status() -> None:
             f"{p.symbol}: {p.qty} @ {float(p.avg_entry_price):.2f} "
             f"→ {float(p.current_price):.2f} ({float(p.unrealized_plpc) * 100:+.2f}%)"
         )
+
+
+def _market_adjust(frame: pd.DataFrame, cfg: Config) -> int:
+    """Fill beta / spy_ret_pct / pnl_vs_spy for settled rows that lack them,
+    using 60 days of 5-minute bars (rows older than that stay blank)."""
+    for col in ("beta", "spy_ret_pct", "pnl_vs_spy"):
+        if col not in frame.columns:
+            frame[col] = np.nan
+    need = frame["exit_price"].notna() & frame["pnl_vs_spy"].isna()
+    if not need.any():
+        return 0
+    symbols = sorted(set(frame.loc[need, "symbol"]))
+    bars = load_bars([*symbols, "SPY"], cfg.interval, period="60d", on_missing="skip")
+    spy = bars.get("SPY")
+    if spy is None:
+        print("warning: no SPY bars — market adjustment skipped this run")
+        return 0
+    betas = {s: market.beta(bars[s], spy) for s in symbols if s in bars}
+    filled = 0
+    for i in frame.index[need]:
+        r = frame.loc[i]
+        b = betas.get(r["symbol"])
+        ret = market.spy_return(spy, pd.Timestamp(r["entry_time"]), pd.Timestamp(r["exit_time"]))
+        if b is None or ret is None:
+            continue
+        d = -1 if r.get("side") == "short" else 1
+        adj = market.adjusted_pnl(
+            float(r["pnl"]),
+            d,
+            float(r["qty"]) * float(r["entry_price"]),
+            b,
+            ret,
+            cfg.hedge_slippage_bps,
+        )
+        frame.loc[i, ["beta", "spy_ret_pct", "pnl_vs_spy"]] = [
+            round(b, 2),
+            round(ret * 100, 4),
+            round(adj, 2),
+        ]
+        filled += 1
+    return filled
 
 
 def journal(cfg: Config) -> None:
@@ -530,20 +574,28 @@ def journal(cfg: Config) -> None:
             }
         )
 
-    if not rows:
+    if not rows and existing is None:
         print("No new filled paper trades to journal.")
         return
     frame = pd.DataFrame(rows)
     updated = sum(1 for r in rows if r["client_order_id"] in open_already)
-    if existing is not None:
+    if existing is not None and rows:
         # A re-visited trade replaces its open placeholder row.
         kept = existing[
             ~existing["client_order_id"].astype(str).isin(set(frame["client_order_id"]))
         ]
         frame = pd.concat([kept, frame], ignore_index=True)
+    elif existing is not None:
+        frame = existing
     if "side" in frame.columns:
         # Rows journaled before the short side existed were all longs.
         frame["side"] = frame["side"].fillna("long")
+    adjusted = _market_adjust(frame, cfg)
+    if not rows and not adjusted:
+        print("No new filled paper trades to journal.")
+        return
     JOURNAL_PATH.parent.mkdir(exist_ok=True)
     frame.to_csv(JOURNAL_PATH, index=False)
+    if adjusted:
+        print(f"Market-adjusted {adjusted} trade(s) against SPY.")
     print(f"Journaled {len(rows)} trade(s), {updated} exit update(s) → {JOURNAL_PATH}")

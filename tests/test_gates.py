@@ -63,7 +63,7 @@ def test_holds_with_too_little_history(tmp_path):
 
 
 def test_long_gate_rules():
-    cfg = Config()  # long_gate="regime", orb exempt
+    cfg = Config(long_gate="regime")  # gate on (off by default since 2026-10-21), orb exempt
     assert _long_gated(cfg, "vwap_pullback", "long", True)
     assert _long_gated(cfg, "vwap_pullback_tuned", "long", True)
     assert not _long_gated(cfg, "vwap_pullback", "short", True)  # shorts never gated

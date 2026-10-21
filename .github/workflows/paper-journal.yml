@@ -34,11 +34,13 @@ jobs:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
         run: uv run trading-lab journal
+      - name: Refresh the review (SPY-adjusted verdicts + decision gate)
+        run: uv run trading-lab review
       - name: Commit the journal
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add results/paper_journal.csv
+          git add results/paper_journal.csv results/REVIEW.md
           git diff --cached --quiet && echo "No journal changes." && exit 0
           git commit -m "journal: paper trades for $(date -u +%F)"
           git push

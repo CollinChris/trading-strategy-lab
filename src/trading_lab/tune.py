@@ -22,7 +22,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from .backtest import run_on
+from .backtest import load_spy_by_date, run_on
 from .config import Config
 from .data import load_bars, load_news, market_today, split_days
 from .metrics import summarize
@@ -105,7 +105,16 @@ def _factory(cls: type[Strategy], params: dict[str, Any] | None = None):
 
 
 def _expectancy(trades: pd.DataFrame) -> float:
-    return float(trades["pnl"].mean()) if len(trades) else 0.0
+    """SPY-adjusted expectancy when available — raw P&L rewards whatever
+    direction the market drifted in the training window."""
+    if not len(trades):
+        return 0.0
+    col = (
+        "pnl_vs_spy"
+        if trades.get("pnl_vs_spy") is not None and trades["pnl_vs_spy"].notna().any()
+        else "pnl"
+    )
+    return float(trades[col].mean())
 
 
 def _stats(trades: pd.DataFrame) -> dict[str, Any]:
@@ -116,7 +125,7 @@ def _stats(trades: pd.DataFrame) -> dict[str, Any]:
         "trades": int(row["trades"]),
         "win_rate": float(row["win_rate_pct"]),
         "profit_factor": float(row["profit_factor"]),
-        "expectancy": float(row["expectancy"]),
+        "expectancy": _expectancy(trades),
         "pnl": float(row["total_pnl"]),
     }
 
@@ -124,6 +133,11 @@ def _stats(trades: pd.DataFrame) -> dict[str, Any]:
 def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) -> Path:
     bars = load_bars(cfg.symbols, cfg.interval, cfg.period)
     news = load_news(cfg.symbols, cfg.interval, cfg.period)
+    spy_by_date = load_spy_by_date(cfg)
+
+    def run_on_spy(bars_, make, cfg_, dates):
+        return run_on(bars_, make, cfg_, dates, spy_by_date=spy_by_date)
+
     all_dates: list[dt.date] = sorted(
         {date for sym_bars in bars.values() for date, _, _ in split_days(sym_bars)}
     )
@@ -146,7 +160,7 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
         best_score = float("-inf")
         skipped = 0
         for params in grid:
-            trades = run_on(bars, _factory(cls, {**params, **extra}), cfg, train)
+            trades = run_on_spy(bars, _factory(cls, {**params, **extra}), cfg, train)
             if len(trades) < MIN_TRAIN_TRADES:
                 skipped += 1
                 continue
@@ -163,14 +177,14 @@ def tune(cfg: Config, train_frac: float = 0.6, out_dir: Path = Path("results")) 
                     "params": "n/a (too few trades)",
                     "train": None,
                     "test": None,
-                    "default_test": _stats(run_on(bars, _factory(cls, extra), cfg, test)),
+                    "default_test": _stats(run_on_spy(bars, _factory(cls, extra), cfg, test)),
                 }
             )
             continue
 
         train_stats = _stats(best_trades)  # the grid loop already ran this exact set
-        test_stats = _stats(run_on(bars, _factory(cls, {**best_params, **extra}), cfg, test))
-        default_test = _stats(run_on(bars, _factory(cls, extra), cfg, test))
+        test_stats = _stats(run_on_spy(bars, _factory(cls, {**best_params, **extra}), cfg, test))
+        default_test = _stats(run_on_spy(bars, _factory(cls, extra), cfg, test))
         tuned_out[name] = {
             "params": best_params,
             "train_expectancy": round(train_stats["expectancy"], 2),
@@ -315,7 +329,7 @@ def _write_report(
 
 Generated {market_today().isoformat()} · optimized on the first **{n_train} sessions**
 (before {cut}), validated on the held-out **{n_test} sessions** · objective:
-**expectancy per trade** (never win rate — see v0.1) · parameter sets with fewer
+**SPY-adjusted expectancy per trade** (P&L net of a beta-weighted SPY hedge — raw P&L rewards whatever direction the market drifted; never win rate) · parameter sets with fewer
 than {MIN_TRAIN_TRADES} train trades are discarded as noise.
 
 {_md_table(table)}

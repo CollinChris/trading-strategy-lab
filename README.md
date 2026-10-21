@@ -213,7 +213,7 @@ to be on.
 
 | Workflow | Cron (UTC) | US market time | Singapore time | What it does |
 |---|---|---|---|---|
-| `paper-scan` | every 10 min, 13:00–19:59 Mon–Fri | 9:00am–3:59pm ET | 9:00pm–3:59am | Checks the latest completed 5-min bar for all 9 strategies × 6 symbols; fires bracket orders (entry + stop + target) at the paper account. Scans outside the 09:35–15:30 ET entry window exit immediately without trading. |
+| `paper-scan` | every 10 min, 13:00–19:59 Mon–Fri | 9:00am–3:59pm ET | 9:00pm–3:59am | Checks the latest completed 5-min bar for all 9 strategies × 10 symbols; fires bracket orders (entry + stop + target) at the paper account. Scans outside the 09:35–15:30 ET entry window exit immediately without trading. |
 | `paper-flatten` | 19:40 & 20:40 Mon–Fri | 3:40pm ET (+ EST-season backup) | 3:40am / 4:40am | Closes every open paper position and cancels open orders — day-trading discipline, nothing held overnight. |
 | `paper-journal` | 21:30 Mon–Fri (+ 23:30 & next-day 14:30 retry slots) | 5:30pm ET | 5:30am | Pulls the day's actual fills from Alpaca, computes the market conditions at each entry plus the regime filter's `regime_ev`, appends rows to `results/paper_journal.csv`, and **commits the file back to the repo**. |
 | `weekly-tune` | 08:00 Sat | 4:00am ET | 4:00pm | Re-tunes parameters on the rolling 60-day window, refreshes the backtest journal, re-runs the walk-forward regime report and **re-fits the live regime filter**; commits `TUNING.md`, `trades.csv`, `REGIME.md`, `regime_model.joblib`. |
@@ -335,10 +335,17 @@ filters (`trading-lab regime`, above) learn from.
       had churned 2-3× in 4 runs and tuned variants lost more live than defaults);
       **long gate**: live longs need regime EV > 0, shorts untouched, ORB exempt;
       side-policy books scored walk-forward in REGIME.md, per-side split in RESULTS.md
-- [ ] Judge the live regime book once ~100 `_regime` fills exist: kept vs skipped
-      expectancy on real fills, against the walk-forward numbers
+- [x] v0.10 — **judge everything against the market.** Every paper and backtest trade
+      also carries `pnl_vs_spy`: its P&L with an opposite, beta-weighted SPY hedge over
+      the same minutes. That reversed the headline result — shorts' +$14.88/trade was
+      market drift (−$1.14 adjusted), market-neutral ORB has no edge, and longs lose
+      −$28/trade *beyond* the market. Tuned/regime variants and the long gate are off;
+      tuning is monthly and report-only; the universe widened to 10 names across
+      sectors; `results/REVIEW.md` (nightly) carries the stop/continue rule: by
+      **2026-12-21**, a strategy needs ≥100 adjusted paper trades with a 95% range above
+      zero to keep running.
+- [ ] Decision date 2026-12-21: continue only strategies that beat the market (see `results/REVIEW.md`)
 - [ ] Longer history + true gappers via Alpaca's historical minute data
-- [ ] Short side for the momentum setups
 - [ ] **Gate:** paper trading is the data-collection lab; nothing touches real money
       without sustained positive out-of-sample **and** paper expectancy
 
