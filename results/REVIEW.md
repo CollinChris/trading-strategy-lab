@@ -1,12 +1,12 @@
 # Lab review — is anything beating the market?
 
-Generated 2026-10-29 · 1048 settled paper trades over 46 sessions (2026-08-24 → 2026-10-29) · 1048 SPY-adjusted.
+Generated 2026-10-30 · 1049 settled paper trades over 47 sessions (2026-08-24 → 2026-10-30) · 1049 SPY-adjusted.
 
 **SPY-adjusted** = the trade's P&L plus an opposite, beta-weighted SPY position held for the same minutes, minus that hedge's slippage. It removes the market's intraday drift, which raw P&L can't tell apart from skill (in Sep–Oct 2026 SPY fell intraday on 27 of 43 days, so shorts looked profitable and longs looked broken).
 
 ## Decision gate
 
-**Undecided — 53 days to the decision date.** No strategy beats the market yet.
+**Undecided — 52 days to the decision date.** No strategy beats the market yet.
 
 Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-adjusted paper trades and a 95% range entirely above zero keeps running. If none does, the study concludes.
 
@@ -17,7 +17,7 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 | orb | 263 | $+1.94 | $-6.50 | $-28.04 to $+15.63 | no evidence of edge |
 | ar_forecast | 192 | $-2.70 | $-16.87 | $-30.85 to $-2.39 | loses beyond the market |
 | high_break_trail | 173 | $-9.39 | $-18.87 | $-36.41 to $-1.01 | loses beyond the market |
-| vwap_pullback | 172 | $-2.70 | $-15.61 | $-27.13 to $-3.92 | loses beyond the market |
+| vwap_pullback | 173 | $-2.03 | $-14.89 | $-26.53 to $-2.96 | loses beyond the market |
 | rsi2_reversion | 129 | $-16.98 | $-24.94 | $-38.79 to $-9.48 | loses beyond the market |
 | ema_crossover | 56 | $-12.48 | $-18.89 | $-38.18 to $+3.06 | no evidence of edge |
 | squeeze_breakout | 37 | $-6.72 | $-7.51 | $-31.02 to $+17.34 | no evidence of edge |
@@ -29,13 +29,13 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 | side | trades | raw $/trade | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|---|
 | long | 561 | $-18.09 | $-28.04 | $-38.59 to $-17.26 | loses beyond the market |
-| short | 487 | $+10.23 | $-1.11 | $-10.44 to $+8.71 | no evidence of edge |
+| short | 488 | $+10.44 | $-0.88 | $-10.27 to $+8.59 | no evidence of edge |
 
 ## Paper trading, by symbol
 
 | symbol | trades | raw $/trade | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|---|
-| COIN | 174 | $+15.83 | $-5.35 | $-30.51 to $+21.67 | no evidence of edge |
+| COIN | 175 | $+16.39 | $-4.70 | $-30.37 to $+23.38 | no evidence of edge |
 | NVDA | 152 | $+10.29 | $+5.31 | $-3.23 to $+14.47 | no evidence of edge |
 | AMD | 150 | $-16.20 | $-20.93 | $-35.79 to $-5.88 | loses beyond the market |
 | TSLA | 145 | $-20.55 | $-25.49 | $-38.75 to $-12.10 | loses beyond the market |
