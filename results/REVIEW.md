@@ -1,12 +1,12 @@
 # Lab review — is anything beating the market?
 
-Generated 2026-10-31 · 1087 settled paper trades over 47 sessions (2026-08-24 → 2026-10-30) · 1087 SPY-adjusted.
+Generated 2026-11-02 · 1088 settled paper trades over 48 sessions (2026-08-24 → 2026-11-02) · 1088 SPY-adjusted.
 
 **SPY-adjusted** = the trade's P&L plus an opposite, beta-weighted SPY position held for the same minutes, minus that hedge's slippage. It removes the market's intraday drift, which raw P&L can't tell apart from skill (in Sep–Oct 2026 SPY fell intraday on 27 of 43 days, so shorts looked profitable and longs looked broken).
 
 ## Decision gate
 
-**Undecided — 51 days to the decision date.** No strategy beats the market yet.
+**Undecided — 49 days to the decision date.** No strategy beats the market yet.
 
 Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-adjusted paper trades and a 95% range entirely above zero keeps running. If none does, the study concludes.
 
@@ -14,7 +14,7 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 
 | strategy_base | trades | raw $/trade | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|---|
-| orb | 270 | $+0.86 | $-6.76 | $-27.01 to $+14.63 | no evidence of edge |
+| orb | 271 | $-0.12 | $-7.49 | $-28.19 to $+13.34 | no evidence of edge |
 | ar_forecast | 199 | $-3.16 | $-17.73 | $-31.78 to $-3.49 | loses beyond the market |
 | high_break_trail | 181 | $-10.41 | $-19.03 | $-35.43 to $-2.73 | loses beyond the market |
 | vwap_pullback | 180 | $-1.93 | $-14.20 | $-25.58 to $-2.78 | loses beyond the market |
@@ -29,7 +29,7 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 | side | trades | raw $/trade | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|---|
 | long | 572 | $-18.17 | $-26.50 | $-37.40 to $-15.30 | loses beyond the market |
-| short | 515 | $+9.33 | $-2.90 | $-11.93 to $+6.64 | no evidence of edge |
+| short | 516 | $+8.80 | $-3.29 | $-12.48 to $+6.23 | no evidence of edge |
 
 ## Paper trading, by symbol
 
@@ -38,7 +38,7 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 | COIN | 179 | $+13.43 | $-8.95 | $-35.07 to $+17.00 | no evidence of edge |
 | NVDA | 156 | $+12.69 | $+5.72 | $-2.78 to $+14.28 | no evidence of edge |
 | AMD | 150 | $-16.20 | $-20.93 | $-35.79 to $-5.88 | loses beyond the market |
-| TSLA | 148 | $-20.61 | $-22.96 | $-36.21 to $-9.64 | loses beyond the market |
+| TSLA | 149 | $-22.25 | $-24.18 | $-37.24 to $-11.00 | loses beyond the market |
 | MSTR | 143 | $+3.95 | $-30.67 | $-60.59 to $-0.24 | loses beyond the market |
 | PLTR | 133 | $-21.04 | $-24.23 | $-41.50 to $-6.03 | loses beyond the market |
 | AMZN | 28 | $-16.46 | $-2.75 | $-29.63 to $+27.66 | too few trades |
@@ -69,7 +69,7 @@ ORB was the lab's best raw performer. Hedged against SPY, does anything remain?
 
 | book | trades | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|
-| ORB, paper | 270 | $-6.76 | $-27.46 to $+14.58 | no evidence of edge |
+| ORB, paper | 271 | $-7.49 | $-27.83 to $+13.50 | no evidence of edge |
 | ORB, backtest | 499 | $-18.70 | $-28.53 to $-8.66 | loses beyond the market |
 
 ## How to read this
