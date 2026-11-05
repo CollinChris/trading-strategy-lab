@@ -1,6 +1,6 @@
 # Lab review — is anything beating the market?
 
-Generated 2026-11-05 · 1187 settled paper trades over 51 sessions (2026-08-24 → 2026-11-05) · 1187 SPY-adjusted.
+Generated 2026-11-05 · 1232 settled paper trades over 51 sessions (2026-08-24 → 2026-11-05) · 1232 SPY-adjusted.
 
 **SPY-adjusted** = the trade's P&L plus an opposite, beta-weighted SPY position held for the same minutes, minus that hedge's slippage. It removes the market's intraday drift, which raw P&L can't tell apart from skill (in Sep–Oct 2026 SPY fell intraday on 27 of 43 days, so shorts looked profitable and longs looked broken).
 
@@ -14,40 +14,40 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 
 | strategy_base | trades | raw $/trade | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|---|
-| orb | 295 | $+1.70 | $-5.29 | $-24.37 to $+13.80 | no evidence of edge |
-| ar_forecast | 213 | $-3.75 | $-16.68 | $-30.04 to $-2.90 | loses beyond the market |
-| high_break_trail | 203 | $-7.45 | $-16.36 | $-32.19 to $-1.56 | loses beyond the market |
-| vwap_pullback | 198 | $-0.54 | $-11.89 | $-23.23 to $-0.41 | loses beyond the market |
-| rsi2_reversion | 144 | $-8.70 | $-18.06 | $-31.90 to $-3.84 | loses beyond the market |
-| ema_crossover | 64 | $-9.67 | $-16.13 | $-36.55 to $+4.38 | no evidence of edge |
-| squeeze_breakout | 40 | $-4.82 | $-5.40 | $-28.29 to $+17.70 | no evidence of edge |
-| news_momentum | 21 | $-37.49 | $-41.81 | $-90.63 to $-0.32 | too few trades |
-| gap_and_go | 9 | $+103.19 | $+5.84 | $-55.34 to $+77.42 | too few trades |
+| orb | 304 | $+6.77 | $-8.48 | $-26.90 to $+11.44 | no evidence of edge |
+| ar_forecast | 222 | $-4.28 | $-18.96 | $-32.22 to $-4.66 | loses beyond the market |
+| high_break_trail | 213 | $-6.74 | $-18.31 | $-33.28 to $-2.83 | loses beyond the market |
+| vwap_pullback | 205 | $+0.12 | $-13.21 | $-24.06 to $-1.85 | loses beyond the market |
+| rsi2_reversion | 148 | $-7.70 | $-17.43 | $-30.66 to $-2.99 | loses beyond the market |
+| ema_crossover | 65 | $-7.78 | $-14.13 | $-32.91 to $+6.16 | no evidence of edge |
+| squeeze_breakout | 43 | $-3.16 | $-3.80 | $-24.05 to $+17.99 | no evidence of edge |
+| news_momentum | 22 | $-43.04 | $-45.10 | $-91.08 to $-2.89 | too few trades |
+| gap_and_go | 10 | $+119.80 | $-9.98 | $-72.28 to $+60.32 | too few trades |
 
 ## Paper trading, by side
 
 | side | trades | raw $/trade | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|---|
-| long | 621 | $-16.36 | $-22.81 | $-33.15 to $-12.53 | loses beyond the market |
-| short | 566 | $+11.17 | $-2.30 | $-10.87 to $+6.44 | no evidence of edge |
+| long | 630 | $-17.50 | $-23.83 | $-33.87 to $-13.87 | loses beyond the market |
+| short | 602 | $+15.28 | $-5.21 | $-13.64 to $+3.26 | no evidence of edge |
 
 ## Paper trading, by symbol
 
 | symbol | trades | raw $/trade | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|---|
-| COIN | 188 | $+15.35 | $-10.31 | $-34.14 to $+15.38 | no evidence of edge |
-| NVDA | 166 | $+13.08 | $+5.83 | $-2.33 to $+14.12 | no evidence of edge |
-| TSLA | 159 | $-22.81 | $-24.04 | $-36.52 to $-11.54 | loses beyond the market |
+| COIN | 192 | $+14.64 | $-16.61 | $-41.44 to $+10.04 | no evidence of edge |
+| NVDA | 170 | $+18.38 | $+3.26 | $-5.45 to $+11.94 | no evidence of edge |
+| TSLA | 163 | $-21.34 | $-27.37 | $-40.38 to $-15.07 | loses beyond the market |
 | AMD | 150 | $-16.20 | $-20.93 | $-36.17 to $-6.15 | loses beyond the market |
 | MSTR | 143 | $+3.95 | $-30.67 | $-60.59 to $-0.24 | loses beyond the market |
 | PLTR | 133 | $-21.04 | $-24.23 | $-41.50 to $-6.03 | loses beyond the market |
-| AMZN | 38 | $-31.98 | $-13.91 | $-37.62 to $+11.29 | no evidence of edge |
-| XOM | 38 | $+15.44 | $+17.55 | $-5.62 to $+41.97 | no evidence of edge |
-| UNH | 37 | $+7.41 | $+2.24 | $-34.15 to $+41.43 | no evidence of edge |
-| CAT | 35 | $-28.10 | $-30.52 | $-49.05 to $-11.65 | loses beyond the market |
-| WMT | 34 | $+19.52 | $+19.52 | $-5.42 to $+44.71 | no evidence of edge |
-| JPM | 33 | $-7.57 | $-3.55 | $-19.90 to $+11.19 | no evidence of edge |
-| LLY | 33 | $+9.64 | $+11.43 | $-8.96 to $+31.11 | no evidence of edge |
+| AMZN | 43 | $-31.77 | $-25.33 | $-48.64 to $+0.02 | no evidence of edge |
+| XOM | 43 | $+12.35 | $+15.21 | $-9.67 to $+39.72 | no evidence of edge |
+| CAT | 41 | $-25.20 | $-36.77 | $-55.97 to $-17.54 | loses beyond the market |
+| UNH | 41 | $+10.11 | $+3.25 | $-30.90 to $+39.09 | no evidence of edge |
+| WMT | 39 | $+21.67 | $+21.71 | $-2.43 to $+45.40 | no evidence of edge |
+| JPM | 37 | $+13.22 | $+4.25 | $-14.33 to $+24.30 | no evidence of edge |
+| LLY | 37 | $+13.33 | $+13.58 | $-10.68 to $+38.42 | no evidence of edge |
 
 ## Backtest (60-day window), by strategy
 
@@ -69,7 +69,7 @@ ORB was the lab's best raw performer. Hedged against SPY, does anything remain?
 
 | book | trades | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|
-| ORB, paper | 295 | $-5.29 | $-24.22 to $+14.07 | no evidence of edge |
+| ORB, paper | 304 | $-8.48 | $-27.74 to $+10.94 | no evidence of edge |
 | ORB, backtest | 499 | $-18.70 | $-28.53 to $-8.66 | loses beyond the market |
 
 ## How to read this
