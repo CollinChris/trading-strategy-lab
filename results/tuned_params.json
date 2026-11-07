@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-17",
+  "generated": "2026-11-07",
   "promotion_rule": "identical winning params + beat defaults held-out, last 3 runs",
   "strategies": {},
   "held": {
@@ -7,7 +7,7 @@
     "vwap_pullback": "best parameters changed within the last 3 runs",
     "ema_crossover": "best parameters changed within the last 3 runs",
     "rsi2_reversion": "best parameters changed within the last 3 runs",
-    "news_momentum": "best parameters changed within the last 3 runs",
+    "news_momentum": "did not beat the defaults on held-out data in all 3 runs",
     "squeeze_breakout": "did not beat the defaults on held-out data in all 3 runs",
     "high_break_trail": "best parameters changed within the last 3 runs",
     "ar_forecast": "best parameters changed within the last 3 runs"
