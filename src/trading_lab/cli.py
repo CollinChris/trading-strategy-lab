@@ -53,6 +53,11 @@ def main() -> None:
         help="regime: longs trade only when the regime filter's EV > 0 (ORB exempt)",
     )
     pp.add_argument("--flatten", action="store_true", help="close all paper positions/orders")
+    pp.add_argument(
+        "--force",
+        action="store_true",
+        help="with --flatten: flatten even before the closing window",
+    )
     pp.add_argument("--status", action="store_true", help="show paper positions and open orders")
     pp.add_argument(
         "--close-stale",
@@ -123,7 +128,7 @@ def main() -> None:
         from . import paper
 
         if args.flatten:
-            paper.flatten()
+            paper.flatten(force=args.force)
         elif args.status:
             paper.status()
         elif args.close_stale:

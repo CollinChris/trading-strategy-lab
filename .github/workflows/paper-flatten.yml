@@ -1,15 +1,18 @@
 name: Paper flatten (EOD)
 
-# Close everything before the bell: 19:40 UTC = 15:40 ET during EDT. The
-# primary trigger is cron-job.org's on-time workflow_dispatch; these GitHub
-# crons are the fallback. flatten() now no-ops when the market is closed, so a
-# late fallback run (GitHub cron can fire 15-25 min late) is harmless instead
-# of leaking overnight positions via un-fillable after-hours orders — the bug
-# on 2026-09-17. The 20:40 run is the EST-season safety net (a summer no-op).
-# If every flatten slot is lost (2026-10-05: a GitHub Actions outage cancelled
-# them all, leaving four positions overnight with no stops), each in-session
-# paper scan closes any shares held over from a previous session first thing,
-# so leftovers are cleared at the next open rather than the next 15:40.
+# Close everything before the bell. The primary trigger is cron-job.org's
+# 15:40 ET workflow_dispatch; these GitHub crons are a fallback.
+#
+# Timing comes from Alpaca's clock, not the trigger time: flatten acts only in
+# the last 25 minutes before the real close (13:00 on half-days) and no-ops
+# outside it — so GitHub's UTC crons, which drift an hour with DST and often
+# fire hours late, can neither flatten early nor queue after-hours orders.
+#
+# Layers of backup for a lost run (GitHub outages on 2026-10-05 and
+# 2026-11-11 never started this job):
+#   1. every paper scan inside the closing window also flattens (15:40, 15:50);
+#   2. the first scan of the next session closes anything held over.
+#
 # Own concurrency group: GitHub keeps one pending run per group, and a shared
 # group let a queued scan cancel a pending flatten.
 on:

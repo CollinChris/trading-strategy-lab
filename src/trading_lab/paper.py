@@ -171,13 +171,45 @@ def close_stale_positions(client) -> int:
     return closed
 
 
+# Timing keyed to the real session close from Alpaca's clock — 16:00 ET
+# normally, 13:00 on half-days (e.g. 2026-11-27, 2026-12-24) — never to fixed
+# clock times, which would trade right up to an early close and then flatten
+# after it, holding everything overnight.
+ENTRY_STOP_MIN = 30  # no new entries in the last 30 minutes
+FLATTEN_WINDOW_MIN = 25  # flatten in the last 25 minutes
+
+
+def session_phase(clock) -> str:
+    """'closed', 'sweep' (flatten window), 'no_entries', or 'open'."""
+    if not clock.is_open:
+        return "closed"
+    left = (clock.next_close - clock.timestamp).total_seconds() / 60
+    if left <= FLATTEN_WINDOW_MIN:
+        return "sweep"
+    if left <= ENTRY_STOP_MIN:
+        return "no_entries"
+    return "open"
+
+
 def scan_and_trade(cfg: Config, dry_run: bool = False) -> None:
     """One pass: signal on the latest completed bar -> bracket market order."""
     now_et = dt.datetime.now(tz=MARKET_TZ)
     client = None if dry_run else _client()
-    # Before the entry-window check, so the 09:30 scan cleans up at the open.
-    if client is not None and client.get_clock().is_open:
-        close_stale_positions(client)
+    if client is not None:
+        phase = session_phase(client.get_clock())
+        if phase == "sweep":
+            # Every scan near the close is also a flatten attempt, so a lost
+            # flatten run (2026-11-11: GitHub never started it, while the
+            # 15:50 scan ran fine) can't leave positions overnight.
+            print("End-of-day sweep: flattening (backs up the flatten job).")
+            _flatten_book(client)
+            return
+        if phase != "closed":
+            # Before the entry-window check, so the 09:30 scan cleans up at the open.
+            close_stale_positions(client)
+        if phase == "no_entries":
+            print(f"Within {ENTRY_STOP_MIN} min of the close — no new entries.")
+            return
 
     entry_cutoff = dt.time.fromisoformat(cfg.entry_cutoff)
     if not dt.time(9, 35) <= now_et.time() < entry_cutoff:
@@ -345,7 +377,7 @@ def _submit(
     client.submit_order(request)
 
 
-def flatten() -> None:
+def flatten(force: bool = False) -> None:
     """Close all paper positions and cancel open orders (EOD discipline).
 
     Only acts while the market is open: a close order submitted after hours
@@ -356,18 +388,32 @@ def flatten() -> None:
     silently fails to close a position whose legs haven't cleared yet. We
     therefore cancel, WAIT for the orders to actually clear, then close and
     verify — retrying once for any position still standing.
+
+    Also skips when it is earlier than the last FLATTEN_WINDOW_MIN minutes of
+    the session (unless force): GitHub's fallback cron is pinned to UTC, so in
+    winter its 19:40 UTC slot lands at 14:40 ET and would close positions an
+    hour early.
     """
     client = _client()
 
     clock = client.get_clock()
-    if not clock.is_open:
+    phase = session_phase(clock)
+    if phase == "closed":
         positions = client.get_all_positions()
         print(
             f"Market closed — skipping flatten ({len(positions)} position(s) held; "
-            "they will be closed at the next in-session flatten)."
+            "the next in-session scan closes anything held over)."
         )
         return
+    if phase != "sweep" and not force:
+        left = (clock.next_close - clock.timestamp).total_seconds() / 60
+        print(f"{left:.0f} min to the close — too early to flatten (use --force to override).")
+        return
+    _flatten_book(client)
 
+
+def _flatten_book(client) -> None:
+    """Cancel, wait for cancels to clear, close everything, verify, retry once."""
     for attempt in (1, 2):
         client.cancel_orders()
         # Wait for the cancels to propagate so bracket legs release the shares.
