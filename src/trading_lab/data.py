@@ -186,3 +186,67 @@ def split_days(bars: pd.DataFrame) -> list[tuple[dt.date, pd.DataFrame, float | 
         out.append((date, day, prior_close))
         prior_close = float(day["close"].iloc[-1])
     return out
+
+
+def load_history(
+    symbols: list[str], start: dt.date, end: dt.date, cache_dir: Path = CACHE_DIR / "alpaca"
+) -> dict[str, pd.DataFrame]:
+    """Multi-year 5-minute bars from Alpaca's historical API (consolidated SIP
+    feed, split- and dividend-adjusted) — the long-history source; yfinance
+    only serves 60 days at this resolution. Cached per symbol-year: completed
+    years never refetch, the current year refreshes daily. Symbols that didn't
+    trade yet (e.g. COIN before 2021) simply start later."""
+    import os
+
+    from alpaca.data.enums import Adjustment
+    from alpaca.data.historical import StockHistoricalDataClient
+    from alpaca.data.requests import StockBarsRequest
+    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+    from dotenv import load_dotenv
+
+    load_dotenv(Path.cwd() / ".env")
+    client = StockHistoricalDataClient(
+        os.environ["ALPACA_API_KEY"], os.environ["ALPACA_SECRET_KEY"]
+    )
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    today = market_today()
+    out: dict[str, pd.DataFrame] = {}
+    for sym in symbols:
+        years = []
+        for year in range(start.year, end.year + 1):
+            path = cache_dir / f"{sym}_5m_{year}.pkl"
+            fresh = path.exists() and (
+                year < today.year
+                or dt.datetime.fromtimestamp(path.stat().st_mtime, tz=MARKET_TZ).date() == today
+            )
+            if fresh:
+                years.append(pd.read_pickle(path))
+                continue
+            req = StockBarsRequest(
+                symbol_or_symbols=sym,
+                timeframe=TimeFrame(5, TimeFrameUnit.Minute),
+                start=dt.datetime(year, 1, 1, tzinfo=dt.UTC),
+                end=min(
+                    dt.datetime(year + 1, 1, 1, tzinfo=dt.UTC),
+                    dt.datetime.now(dt.UTC) - dt.timedelta(minutes=20),
+                ),
+                adjustment=Adjustment.ALL,
+            )
+            raw = client.get_stock_bars(req).df
+            if raw.empty:
+                frame = pd.DataFrame(columns=COLUMNS)
+            else:
+                frame = raw.xs(sym, level="symbol") if "symbol" in raw.index.names else raw
+                frame.index = frame.index.tz_convert(MARKET_TZ)
+                frame = _normalize(frame)
+            frame.to_pickle(path)
+            years.append(frame)
+        bars = (
+            pd.concat([y for y in years if not y.empty]).sort_index()
+            if any(not y.empty for y in years)
+            else pd.DataFrame(columns=COLUMNS)
+        )
+        bars = bars[(bars.index.date >= start) & (bars.index.date <= end)]
+        if not bars.empty:
+            out[sym] = bars[~bars.index.duplicated()]
+    return out

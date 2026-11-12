@@ -90,13 +90,20 @@ def entry_conditions(
     prior_close: float | None,
     vwap: pd.Series,
     spy_day: pd.DataFrame | None,
+    day_atr: pd.Series | None = None,
+    cols: dict[str, np.ndarray] | None = None,
 ) -> dict:
-    """Snapshot of market context at the entry bar (index i)."""
+    """Snapshot of market context at the entry bar (index i). Per-trade
+    callers (the engine) pass the session's ATR and column arrays —
+    re-deriving them from the DataFrame on every trade was a hotspot."""
+    if cols is None:
+        cols = {k: day[k].to_numpy(dtype=float) for k in ("open", "high", "low", "close", "volume")}
+    vol = cols["volume"]
     ts = day.index[i]
-    day_open = float(day["open"].iloc[0])
+    day_open = float(cols["open"][0])
     gap = (day_open / prior_close - 1.0) * 100.0 if prior_close else float("nan")
-    avg_vol = float(day["volume"].iloc[:i].mean()) if i >= 1 else 0.0
-    rel_vol = float(day["volume"].iloc[i - 1]) / avg_vol if avg_vol > 0 else float("nan")
+    avg_vol = float(vol[:i].mean()) if i >= 1 else 0.0
+    rel_vol = float(vol[i - 1]) / avg_vol if avg_vol > 0 else float("nan")
     spy_change = float("nan")
     if spy_day is not None and not spy_day.empty:
         spy_close = spy_day["close"].asof(ts)
@@ -105,7 +112,7 @@ def entry_conditions(
 
     # Time-series features from bars 0..i only. sqrt(78) daily-izes 5m bar vol
     # (78 regular-hours bars per session — the lab's fixed interval).
-    closes = day["close"].iloc[: i + 1].to_numpy(dtype=float)
+    closes = cols["close"][: i + 1]
     rets = np.diff(np.log(closes))
     rvol = float(np.std(rets, ddof=1) * np.sqrt(78.0) * 100.0) if len(rets) >= 2 else float("nan")
     slope = (
@@ -116,9 +123,10 @@ def entry_conditions(
     ac1 = float("nan")
     if len(rets) >= 3 and np.std(rets[:-1]) > 0 and np.std(rets[1:]) > 0:
         ac1 = float(np.corrcoef(rets[:-1], rets[1:])[0, 1])
-    atr_pct = float(atr(day).iloc[i] / closes[-1] * 100.0) if i >= 1 else float("nan")
-    hi = float(day["high"].iloc[: i + 1].max())
-    lo = float(day["low"].iloc[: i + 1].min())
+    atr_now = (day_atr if day_atr is not None else atr(day)).iloc[i]
+    atr_pct = float(atr_now / closes[-1] * 100.0) if i >= 1 else float("nan")
+    hi = float(cols["high"][: i + 1].max())
+    lo = float(cols["low"][: i + 1].min())
     range_pos = (entry_price - lo) / (hi - lo) if hi > lo else float("nan")
 
     return {
@@ -166,7 +174,7 @@ def run_symbol_day(
     strategy.symbol = symbol
     strategy.new_day(day, prior_close)
     vwap = session_vwap(day)
-    atr_series = atr(day) if cfg.vol_sizing else None
+    day_atr = atr(day)  # once per session: entry conditions + optional vol sizing
     entry_cutoff = dt.time.fromisoformat(cfg.entry_cutoff)
     eod_cutoff = dt.time.fromisoformat(cfg.eod_cutoff)
     trade_cap = min(cfg.max_trades_per_day, strategy.max_trades_per_day)
@@ -207,12 +215,25 @@ def run_symbol_day(
             )
         )
 
+    # Per-bar reads from plain arrays/lists (pandas .iloc in this loop made a
+    # 10-year run take hours); timestamps and their wall-clock times up front.
+    stamps = list(day.index)
+    times = [t.time() for t in stamps]
+    opens, highs = day["open"].to_numpy(dtype=float), day["high"].to_numpy(dtype=float)
+    lows, closes = day["low"].to_numpy(dtype=float), day["close"].to_numpy(dtype=float)
+    cols = {
+        "open": opens,
+        "high": highs,
+        "low": lows,
+        "close": closes,
+        "volume": day["volume"].to_numpy(dtype=float),
+    }
     for i in range(len(day)):
-        ts = day.index[i]
-        bar_open = float(day["open"].iloc[i])
-        bar_high = float(day["high"].iloc[i])
-        bar_low = float(day["low"].iloc[i])
-        bar_close = float(day["close"].iloc[i])
+        ts = stamps[i]
+        bar_open = float(opens[i])
+        bar_high = float(highs[i])
+        bar_low = float(lows[i])
+        bar_close = float(closes[i])
 
         # 1) Dynamic exit signalled on the previous bar fills at this open.
         if pos is not None and pending_exit:
@@ -230,15 +251,17 @@ def run_symbol_day(
                 if sig.stop_price is not None
                 else entry * (1 - d * (sig.stop_pct or 0.01))
             )
-            if atr_series is not None and sig.stop_price is None:
+            if cfg.vol_sizing and sig.stop_price is None:
                 # ATR from the completed signal bar (i-1) — bar i is still forming.
-                stop = entry - d * cfg.stop_atr_mult * float(atr_series.iloc[i - 1])
+                stop = entry - d * cfg.stop_atr_mult * float(day_atr.iloc[i - 1])
             if d * (entry - stop) > 0:  # skip entries that gap through their own stop
                 qty = position_size(entry, stop, cfg)
                 if qty > 0:
                     risk = abs(entry - stop)
                     target = entry + d * sig.target_r * risk if sig.target_r else None
-                    conditions = entry_conditions(day, i, entry, prior_close, vwap, spy_day)
+                    conditions = entry_conditions(
+                        day, i, entry, prior_close, vwap, spy_day, day_atr, cols
+                    )
                     pos = _Open(
                         ts, entry, qty, stop, target, sig.trail_dist, sig.reason, conditions, d
                     )
@@ -265,19 +288,19 @@ def run_symbol_day(
                     pos.stop = min(pos.stop, bar_low + pos.trail_dist)
 
         # 4) End of day: flatten and stop trading.
-        at_eod = i == last_i or ts.time() >= eod_cutoff
+        at_eod = i == last_i or times[i] >= eod_cutoff
         if at_eod:
             if pos is not None:
                 close(pos, ts, _fill_price(bar_close, cfg.slippage_bps, pos.exit_side), "eod")
                 pos = None
-            if ts.time() >= eod_cutoff:
+            if times[i] >= eod_cutoff:
                 break
             continue
 
         # 5) Evaluate signals on this completed bar (for the next bar's open).
         if pos is not None:
             pending_exit = strategy.exit_signal(i)
-        elif taken < trade_cap and ts.time() < entry_cutoff and i < last_i:
+        elif taken < trade_cap and times[i] < entry_cutoff and i < last_i:
             pending_entry = strategy.entry_signal(i)
 
     return trades

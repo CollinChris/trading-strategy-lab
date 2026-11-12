@@ -64,6 +64,18 @@ def main() -> None:
         "journal", help="append today's filled paper trades to results/paper_journal.csv"
     )
     sub.add_parser("review", help="write results/REVIEW.md: SPY-adjusted verdicts + decision gate")
+    sub.add_parser(
+        "options-study", help="Cboe option-selling benchmarks since 1986: alpha vs market exposure"
+    )
+    hs = sub.add_parser(
+        "history", help="10-year study on Alpaca history: SPY-adjusted, walk-forward tuned"
+    )
+    hs.add_argument("--start", default="2016-01-01")
+    hs.add_argument("--end", default=None, help="default: yesterday")
+    hs.add_argument("--workers", type=int, default=7)
+    hs.add_argument(
+        "--full-grid", action="store_true", help="also walk-forward tune the slow AR model"
+    )
 
     args = parser.parse_args()
 
@@ -130,6 +142,27 @@ def main() -> None:
         from . import paper
 
         paper.journal(Config())
+
+    elif args.command == "options-study":
+        from .options_study import build as build_options
+
+        print(f"Options study → {build_options()}")
+
+    elif args.command == "history":
+        import datetime as dt
+
+        from .data import market_today
+        from .history import run
+
+        end = dt.date.fromisoformat(args.end) if args.end else market_today() - dt.timedelta(days=1)
+        path = run(
+            dt.date.fromisoformat(args.start),
+            end,
+            DEFAULT_SYMBOLS,
+            workers=args.workers,
+            full_grid=args.full_grid,
+        )
+        print(f"History report → {path}")
 
     elif args.command == "review":
         from pathlib import Path

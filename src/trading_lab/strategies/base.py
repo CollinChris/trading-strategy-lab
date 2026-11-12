@@ -50,6 +50,13 @@ class Strategy(ABC):
         """Reset state and precompute causal indicators for one session."""
         self.day = day
         self.prior_close = prior_close
+        # Plain arrays for per-bar reads: pandas .iloc costs ~10µs a call,
+        # which made a 10-year backtest take hours.
+        self.o = day["open"].to_numpy(dtype=float)
+        self.h = day["high"].to_numpy(dtype=float)
+        self.l = day["low"].to_numpy(dtype=float)
+        self.c = day["close"].to_numpy(dtype=float)
+        self.v = day["volume"].to_numpy(dtype=float)
 
     @abstractmethod
     def entry_signal(self, i: int) -> EntrySignal | None:

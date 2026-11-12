@@ -40,9 +40,9 @@ class GapAndGo(Strategy):
     def entry_signal(self, i: int) -> EntrySignal | None:
         if not (self.active_long or self.active_short) or i < 1 or i > self.entry_window_bars:
             return None
-        close = float(self.day["close"].iloc[i])
-        volume = float(self.day["volume"].iloc[i])
-        avg_volume = float(self.day["volume"].iloc[:i].mean())
+        close = float(self.c[i])
+        volume = float(self.v[i])
+        avg_volume = float(self.v[:i].mean())
         if volume <= 1.2 * avg_volume:
             return None
         if self.active_long and close > self.opening_high:

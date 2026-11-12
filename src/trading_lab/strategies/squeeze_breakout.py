@@ -7,6 +7,7 @@ band bets on the expansion. Stop at the middle band, take profit at 2R.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 
 from ..indicators import bollinger, session_vwap
@@ -29,30 +30,32 @@ class SqueezeBreakout(Strategy):
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         super().new_day(day, prior_close)
-        self.mid, self.upper, self.lower, self.bandwidth = bollinger(day["close"], self.bb_period)
-        self.vwap = session_vwap(day)
+        self.mid, self.upper, self.lower, self.bandwidth = (
+            x.to_numpy() for x in bollinger(day["close"], self.bb_period)
+        )
+        self.vwap = session_vwap(day).to_numpy()
 
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < self.bb_period + self.bw_lookback:
             return None
-        window = self.bandwidth.iloc[i - self.bw_lookback : i]
-        if window.isna().any():
+        window = self.bandwidth[i - self.bw_lookback : i]
+        if np.isnan(window).any():
             return None
-        was_squeezed = float(self.bandwidth.iloc[i - 1]) <= float(window.min()) * 1.05
+        was_squeezed = float(self.bandwidth[i - 1]) <= float(window.min()) * 1.05
         if not was_squeezed:
             return None
-        close = float(self.day["close"].iloc[i])
-        above_vwap = close > float(self.vwap.iloc[i])
-        if close > float(self.upper.iloc[i]) and above_vwap:
+        close = float(self.c[i])
+        above_vwap = close > float(self.vwap[i])
+        if close > float(self.upper[i]) and above_vwap:
             return EntrySignal(
-                reason=f"squeeze breakout above upper band {float(self.upper.iloc[i]):.2f}",
-                stop_price=float(self.mid.iloc[i]),
+                reason=f"squeeze breakout above upper band {float(self.upper[i]):.2f}",
+                stop_price=float(self.mid[i]),
                 target_r=self.target_r,
             )
-        if close < float(self.lower.iloc[i]) and not above_vwap:
+        if close < float(self.lower[i]) and not above_vwap:
             return EntrySignal(
-                reason=f"squeeze breakdown below lower band {float(self.lower.iloc[i]):.2f}",
-                stop_price=float(self.mid.iloc[i]),
+                reason=f"squeeze breakdown below lower band {float(self.lower[i]):.2f}",
+                stop_price=float(self.mid[i]),
                 target_r=self.target_r,
                 side="short",
             )

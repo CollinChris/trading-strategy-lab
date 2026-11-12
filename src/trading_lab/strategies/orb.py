@@ -37,7 +37,7 @@ class OpeningRangeBreakout(Strategy):
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < self.range_bars or i > self.entry_window_bars:
             return None
-        close = float(self.day["close"].iloc[i])
+        close = float(self.c[i])
         mid = (self.or_high + self.or_low) / 2.0
         if close > self.or_high:
             return EntrySignal(

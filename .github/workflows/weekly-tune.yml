@@ -53,6 +53,9 @@ jobs:
       - name: Re-fit the regime filter (monthly, monitoring only)
         if: steps.when.outputs.monthly == 'true'
         run: uv run trading-lab regime
+      - name: Options study (monthly; Cboe benchmark history, free data)
+        if: steps.when.outputs.monthly == 'true'
+        run: uv run trading-lab options-study
       - name: Refresh the review (SPY-adjusted verdicts + decision gate)
         run: uv run trading-lab review
       - name: Commit the tuning report, refreshed backtest, and regime filter
@@ -61,7 +64,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add results/TUNING.md results/tuning_shrinkage.png results/tuning_history.csv results/tuned_params.json
           git add results/trades.csv results/RESULTS.md results/equity_curves.png
-          git add results/REGIME.md results/regime_oos.png results/regime_model.joblib results/REVIEW.md
+          git add results/REGIME.md results/regime_oos.png results/regime_model.joblib results/REVIEW.md results/OPTIONS.md
           git diff --cached --quiet && echo "No weekly changes." && exit 0
           git commit -m "weekly: backtest + review refresh $(date -u +%F)"
           git push

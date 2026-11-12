@@ -31,19 +31,19 @@ class VwapPullback(Strategy):
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         super().new_day(day, prior_close)
-        self.vwap = session_vwap(day)
+        self.vwap = session_vwap(day).to_numpy()
 
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < self.warmup_bars:
             return None
-        vwap_prev = float(self.vwap.iloc[i - 1])
-        vwap_now = float(self.vwap.iloc[i])
-        day_open = float(self.day["open"].iloc[0])
-        close = float(self.day["close"].iloc[i])
+        vwap_prev = float(self.vwap[i - 1])
+        vwap_now = float(self.vwap[i])
+        day_open = float(self.o[0])
+        close = float(self.c[i])
 
-        touched = float(self.day["low"].iloc[i - 1]) <= vwap_prev * (1 + self.touch_tolerance)
-        held = float(self.day["close"].iloc[i - 1]) >= vwap_prev * (1 - self.touch_tolerance)
-        bounced = close > float(self.day["high"].iloc[i - 1])
+        touched = float(self.l[i - 1]) <= vwap_prev * (1 + self.touch_tolerance)
+        held = float(self.c[i - 1]) >= vwap_prev * (1 - self.touch_tolerance)
+        bounced = close > float(self.h[i - 1])
         if touched and held and bounced and close > day_open:
             return EntrySignal(
                 reason=f"bounce off session VWAP {vwap_now:.2f}",
@@ -52,9 +52,9 @@ class VwapPullback(Strategy):
             )
 
         # Mirror: red day, rally tags VWAP from below and gets rejected.
-        tagged = float(self.day["high"].iloc[i - 1]) >= vwap_prev * (1 - self.touch_tolerance)
-        held_below = float(self.day["close"].iloc[i - 1]) <= vwap_prev * (1 + self.touch_tolerance)
-        rejected = close < float(self.day["low"].iloc[i - 1])
+        tagged = float(self.h[i - 1]) >= vwap_prev * (1 - self.touch_tolerance)
+        held_below = float(self.c[i - 1]) <= vwap_prev * (1 + self.touch_tolerance)
+        rejected = close < float(self.l[i - 1])
         if tagged and held_below and rejected and close < day_open:
             return EntrySignal(
                 reason=f"rejection at session VWAP {vwap_now:.2f}",

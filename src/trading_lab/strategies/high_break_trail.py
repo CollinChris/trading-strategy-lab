@@ -24,8 +24,8 @@ class HighBreakTrail(Strategy):
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         super().new_day(day, prior_close)
-        self.atr = atr(day)
-        self.vwap = session_vwap(day)
+        self.atr = atr(day).to_numpy()
+        self.vwap = session_vwap(day).to_numpy()
         n = min(self.window_bars, len(day))
         self.opening_high = float(day["high"].iloc[:n].max())
         self.opening_low = float(day["low"].iloc[:n].min())
@@ -33,9 +33,9 @@ class HighBreakTrail(Strategy):
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < self.window_bars:
             return None
-        close = float(self.day["close"].iloc[i])
-        above_vwap = close > float(self.vwap.iloc[i])
-        dist = self.trail_atr_mult * float(self.atr.iloc[i])
+        close = float(self.c[i])
+        above_vwap = close > float(self.vwap[i])
+        dist = self.trail_atr_mult * float(self.atr[i])
         if dist <= 0:
             return None
         if close > self.opening_high and above_vwap:

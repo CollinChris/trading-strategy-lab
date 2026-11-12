@@ -25,14 +25,14 @@ class RsiReversion(Strategy):
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         super().new_day(day, prior_close)
-        self.rsi2 = rsi(day["close"], period=2)
-        self.vwap = session_vwap(day)
+        self.rsi2 = rsi(day["close"], period=2).to_numpy()
+        self.vwap = session_vwap(day).to_numpy()
 
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < 5:
             return None
-        rsi_now = float(self.rsi2.iloc[i])
-        above_vwap = float(self.day["close"].iloc[i]) > float(self.vwap.iloc[i])
+        rsi_now = float(self.rsi2[i])
+        above_vwap = float(self.c[i]) > float(self.vwap[i])
         if rsi_now < self.entry_level and above_vwap:
             self._side = 1
             return EntrySignal(
@@ -52,7 +52,7 @@ class RsiReversion(Strategy):
         return None
 
     def exit_signal(self, i: int) -> bool:
-        rsi_now = float(self.rsi2.iloc[i])
+        rsi_now = float(self.rsi2[i])
         if self._side == 1:
             return rsi_now > self.exit_level
         return rsi_now < 100.0 - self.exit_level

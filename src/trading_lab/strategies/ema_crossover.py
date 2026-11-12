@@ -24,19 +24,19 @@ class EmaCrossover(Strategy):
 
     def new_day(self, day: pd.DataFrame, prior_close: float | None) -> None:
         super().new_day(day, prior_close)
-        self.fast = ema(day["close"], self.fast_span)
-        self.slow = ema(day["close"], self.slow_span)
-        self.vwap = session_vwap(day)
+        self.fast = ema(day["close"], self.fast_span).to_numpy()
+        self.slow = ema(day["close"], self.slow_span).to_numpy()
+        self.vwap = session_vwap(day).to_numpy()
 
     def entry_signal(self, i: int) -> EntrySignal | None:
         if i < self.slow_span:
             return None
-        fast_now, slow_now = float(self.fast.iloc[i]), float(self.slow.iloc[i])
-        fast_prev, slow_prev = float(self.fast.iloc[i - 1]), float(self.slow.iloc[i - 1])
-        close = float(self.day["close"].iloc[i])
-        vwap_now = float(self.vwap.iloc[i])
+        fast_now, slow_now = float(self.fast[i]), float(self.slow[i])
+        fast_prev, slow_prev = float(self.fast[i - 1]), float(self.slow[i - 1])
+        close = float(self.c[i])
+        vwap_now = float(self.vwap[i])
         if fast_now > slow_now and fast_prev <= slow_prev and close > vwap_now:
-            stop = float(self.day["low"].iloc[max(0, i - self.stop_bars + 1) : i + 1].min())
+            stop = float(self.l[max(0, i - self.stop_bars + 1) : i + 1].min())
             self._side = 1
             return EntrySignal(
                 reason=f"EMA{self.fast_span}/{self.slow_span} cross up above VWAP",
@@ -44,7 +44,7 @@ class EmaCrossover(Strategy):
                 target_r=None,
             )
         if fast_now < slow_now and fast_prev >= slow_prev and close < vwap_now:
-            stop = float(self.day["high"].iloc[max(0, i - self.stop_bars + 1) : i + 1].max())
+            stop = float(self.h[max(0, i - self.stop_bars + 1) : i + 1].max())
             self._side = -1
             return EntrySignal(
                 reason=f"EMA{self.fast_span}/{self.slow_span} cross down below VWAP",
@@ -55,5 +55,5 @@ class EmaCrossover(Strategy):
         return None
 
     def exit_signal(self, i: int) -> bool:
-        diff = float(self.fast.iloc[i]) - float(self.slow.iloc[i])
+        diff = float(self.fast[i]) - float(self.slow[i])
         return diff * self._side < 0  # EMAs crossed back against the position
