@@ -1,12 +1,12 @@
 # Lab review — is anything beating the market?
 
-Generated 2026-11-14 · 1431 settled paper trades over 57 sessions (2026-08-24 → 2026-11-13) · 1431 SPY-adjusted.
+Generated 2026-11-16 · 1432 settled paper trades over 58 sessions (2026-08-24 → 2026-11-16) · 1432 SPY-adjusted.
 
 **SPY-adjusted** = the trade's P&L plus an opposite, beta-weighted SPY position held for the same minutes, minus that hedge's slippage. It removes the market's intraday drift, which raw P&L can't tell apart from skill (in Sep–Oct 2026 SPY fell intraday on 27 of 43 days, so shorts looked profitable and longs looked broken).
 
 ## Decision gate
 
-**Undecided — 37 days to the decision date.** No strategy beats the market yet.
+**Undecided — 35 days to the decision date.** No strategy beats the market yet.
 
 Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-adjusted paper trades and a 95% range entirely above zero keeps running. If none does, the study concludes.
 
@@ -17,7 +17,7 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 | orb | 350 | $-3.18 | $-16.62 | $-35.47 to $+3.15 | no evidence of edge |
 | ar_forecast | 248 | $-8.26 | $-20.41 | $-32.88 to $-7.64 | loses beyond the market |
 | high_break_trail | 246 | $-16.13 | $-25.20 | $-42.99 to $-8.59 | loses beyond the market |
-| vwap_pullback | 239 | $-2.72 | $-15.37 | $-27.06 to $-4.47 | loses beyond the market |
+| vwap_pullback | 240 | $-2.88 | $-15.47 | $-26.32 to $-4.62 | loses beyond the market |
 | rsi2_reversion | 181 | $-8.92 | $-17.04 | $-29.62 to $-4.62 | loses beyond the market |
 | ema_crossover | 76 | $-10.20 | $-15.38 | $-33.02 to $+2.48 | no evidence of edge |
 | squeeze_breakout | 51 | $-2.21 | $-2.29 | $-20.58 to $+17.55 | no evidence of edge |
@@ -28,7 +28,7 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 
 | side | trades | raw $/trade | SPY-adjusted $/trade | 95% range | verdict |
 |---|---|---|---|---|---|
-| long | 759 | $-22.53 | $-28.86 | $-39.32 to $-18.32 | loses beyond the market |
+| long | 760 | $-22.55 | $-28.87 | $-39.39 to $-18.50 | loses beyond the market |
 | short | 672 | $+8.19 | $-8.93 | $-16.93 to $-0.63 | loses beyond the market |
 
 ## Paper trading, by symbol
@@ -44,7 +44,7 @@ Rule, set 2026-10-21: by **2026-12-21**, a strategy that has at least 100 SPY-ad
 | CAT | 62 | $-24.22 | $-33.04 | $-49.37 to $-16.07 | loses beyond the market |
 | AMZN | 61 | $-31.55 | $-19.48 | $-39.39 to $+1.55 | no evidence of edge |
 | UNH | 61 | $-6.00 | $-9.83 | $-34.38 to $+16.64 | no evidence of edge |
-| LLY | 57 | $+12.49 | $+12.17 | $-6.32 to $+30.90 | no evidence of edge |
+| LLY | 58 | $+11.58 | $+11.32 | $-6.17 to $+29.54 | no evidence of edge |
 | JPM | 56 | $+0.90 | $-5.75 | $-19.46 to $+9.36 | no evidence of edge |
 | WMT | 56 | $+1.06 | $+1.10 | $-21.00 to $+23.50 | no evidence of edge |
 | XOM | 56 | $+20.67 | $+22.44 | $+2.08 to $+43.04 | promising (needs more trades) |
