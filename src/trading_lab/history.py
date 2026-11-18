@@ -62,12 +62,21 @@ def run(
     workers: int = 7,
     out: Path = Path("results/HISTORY.md"),
     full_grid: bool = False,
+    strategies: list[str] | None = None,
+    trades_out: Path | None = None,
+    fetch_only: bool = False,
 ) -> Path:
+    """Run the study. With `strategies`, only those run and the raw trades go to
+    `trades_out` with no report — one shard of the GitHub Actions matrix, which
+    `report()` later merges. (A full local run pinned 7 of 8 laptop cores for
+    hours; the workflow spreads it across GitHub's runners instead.)"""
     print(f"loading {len(symbols)} symbols + SPY, {start} → {end} (cached after the first run)")
     load_history([*symbols, "SPY"], start, end)  # fill the cache once, in this process
+    if fetch_only:
+        return Path("data/alpaca")
     jobs = []
     for name, (_cls, grid) in GRIDS.items():
-        if name in EXCLUDED:
+        if name in EXCLUDED or (strategies and name not in strategies):
             continue
         sets = [None] if (name in DEFAULTS_ONLY and not full_grid) else [None, *grid]
         for params in sets:
@@ -85,8 +94,26 @@ def run(
     trades = pd.concat([f for f in frames if not f.empty], ignore_index=True)
     trades["date"] = pd.to_datetime(trades["date"])
     trades["year"] = trades["date"].dt.year
+    target = trades_out or HISTORY_DIR / "trades.pkl"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    trades.to_pickle(target)
+    if strategies:
+        return target
+    out.write_text(render(trades, start, end, symbols, full_grid))
+    return out
+
+
+def report(
+    parts: list[Path],
+    symbols: list[str],
+    out: Path = Path("results/HISTORY.md"),
+    full_grid: bool = False,
+) -> Path:
+    """Merge shard pickles from the workflow matrix and write the report."""
+    trades = pd.concat([pd.read_pickle(p) for p in parts], ignore_index=True)
     HISTORY_DIR.mkdir(parents=True, exist_ok=True)
     trades.to_pickle(HISTORY_DIR / "trades.pkl")
+    start, end = trades["date"].min().date(), trades["date"].max().date()
     out.write_text(render(trades, start, end, symbols, full_grid))
     return out
 
@@ -186,6 +213,7 @@ def render(
     yearly_md = yearly.map(lambda v: "—" if pd.isna(v) else f"{v:+.1f}").reset_index(
         names="strategy"
     )
+    yearly_md.columns = [str(c) for c in yearly_md.columns]
     pos_years = (yearly > 0).sum(axis=1)
 
     side_rows = []
@@ -204,7 +232,7 @@ def render(
 
     wf = walk_forward(trades)
     wf_rows = []
-    for strat, g in wf.groupby("strategy"):
+    for strat, g in wf.groupby("strategy") if not wf.empty else []:
         tuned = g["tuned_sum"].sum() / g["tuned_n"].sum()
         default = g["default_sum"].sum() / g["default_n"].sum()
         beat = (g["tuned_sum"] / g["tuned_n"] > g["default_sum"] / g["default_n"]).sum()

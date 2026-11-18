@@ -70,3 +70,38 @@ def test_day_clustered_ci_and_walk_forward():
     # 2021 is a regime change: the pick, chosen on 2019-2020, loses out of sample.
     y21 = wf[wf["year"] == 2021].iloc[0]
     assert y21["tuned_sum"] / y21["tuned_n"] < y21["default_sum"] / y21["default_n"]
+
+
+def test_history_report_renders_multi_year_and_short_windows():
+    """Regression: integer year headers crashed the markdown writer, and an
+    empty walk-forward table crashed render — both only at the end of a run."""
+    from trading_lab.history import render
+
+    def trades(years):
+        rows = []
+        for y in years:
+            for d in pd.bdate_range(f"{y}-01-02", periods=40):
+                for p in ("default", '{"range_bars": 6}'):
+                    rows.append(
+                        {
+                            "strategy": "orb",
+                            "params": p,
+                            "symbol": "JPM",
+                            "date": d,
+                            "side": "long",
+                            "pnl": 1.0,
+                            "pnl_vs_spy": -1.0,
+                            "year": y,
+                        }
+                    )
+        return pd.DataFrame(rows)
+
+    import datetime as dt
+
+    long_run = render(
+        trades([2018, 2019, 2020, 2021]), dt.date(2018, 1, 1), dt.date(2021, 12, 31), ["JPM"]
+    )
+    assert "## Year by year" in long_run and "| 2018 | 2019 | 2020 | 2021 |" in long_run
+    assert "years tuned beat defaults" in long_run
+    short_run = render(trades([2019]), dt.date(2019, 1, 1), dt.date(2019, 3, 31), ["JPM"])
+    assert "Not enough years" in short_run

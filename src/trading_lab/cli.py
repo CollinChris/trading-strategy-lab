@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from .config import DEFAULT_SYMBOLS, Config
 
@@ -81,6 +82,14 @@ def main() -> None:
     hs.add_argument(
         "--full-grid", action="store_true", help="also walk-forward tune the slow AR model"
     )
+    hs.add_argument(
+        "--strategies", nargs="*", help="run only these (one workflow shard; no report)"
+    )
+    hs.add_argument("--trades-out", default=None, help="where a shard writes its raw trades")
+    hs.add_argument("--fetch-only", action="store_true", help="download/cache the bars, then stop")
+    hr = sub.add_parser("history-report", help="merge history shards into results/HISTORY.md")
+    hr.add_argument("parts", nargs="+", help="shard pickles from `history --strategies ...`")
+    hr.add_argument("--full-grid", action="store_true")
 
     args = parser.parse_args()
 
@@ -111,8 +120,6 @@ def main() -> None:
         print(f"\nTuning report → {path}")
 
     elif args.command == "regime":
-        from pathlib import Path
-
         from .regime import run_regime
 
         path = run_regime(
@@ -166,12 +173,19 @@ def main() -> None:
             DEFAULT_SYMBOLS,
             workers=args.workers,
             full_grid=args.full_grid,
+            strategies=args.strategies,
+            trades_out=Path(args.trades_out) if args.trades_out else None,
+            fetch_only=args.fetch_only,
         )
+        print(f"History → {path}")
+
+    elif args.command == "history-report":
+        from .history import report
+
+        path = report([Path(p) for p in args.parts], DEFAULT_SYMBOLS, full_grid=args.full_grid)
         print(f"History report → {path}")
 
     elif args.command == "review":
-        from pathlib import Path
-
         from .review import build
 
         path = build(

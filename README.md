@@ -344,6 +344,10 @@ filters (`trading-lab regime`, above) learn from.
       sectors; `results/REVIEW.md` (nightly) carries the stop/continue rule: by
       **2026-12-21**, a strategy needs ≥100 adjusted paper trades with a 95% range above
       zero to keep running.
+- [x] v0.11 — ten-year study on Alpaca 5-minute history (2016+): every strategy
+      SPY-adjusted, year by year, walk-forward tuned — run on GitHub's runners by the
+      manual **History study** workflow (`gh workflow run history-study.yml`), never on
+      the laptop; plus the Cboe options-selling study (`results/OPTIONS.md`)
 - [ ] Decision date 2026-12-21: continue only strategies that beat the market (see `results/REVIEW.md`)
 - [ ] Longer history + true gappers via Alpaca's historical minute data
 - [ ] **Gate:** paper trading is the data-collection lab; nothing touches real money

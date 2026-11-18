@@ -1,0 +1,110 @@
+name: History study (10 years)
+
+# Manual (Actions tab → "Run workflow", or `gh workflow run history-study.yml`).
+# The ten-year walk-forward study behind results/HISTORY.md, run entirely on
+# GitHub's runners: one job downloads the 5-minute bars, eight jobs run one
+# strategy each in parallel, and a final job merges them and commits the
+# report. A full local run pinned 7 of 8 laptop cores for hours and crashed
+# the machine (2026-11-18); here the laptop can be closed.
+on:
+  workflow_dispatch:
+    inputs:
+      start:
+        description: "First session (YYYY-MM-DD)"
+        default: "2016-01-01"
+
+permissions:
+  contents: write
+
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      end: ${{ steps.window.outputs.end }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Study window ends at the last completed session
+        id: window
+        run: echo "end=$(TZ=America/New_York date -d yesterday +%F)" >> "$GITHUB_OUTPUT"
+      - name: Restore cached bars (completed years never change)
+        uses: actions/cache@v4
+        with:
+          path: data/alpaca
+          key: alpaca-5m-${{ steps.window.outputs.end }}
+          restore-keys: alpaca-5m-
+      - name: Download 5-minute bars from Alpaca
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: >-
+          uv run trading-lab history --fetch-only
+          --start ${{ inputs.start }} --end ${{ steps.window.outputs.end }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bars
+          path: data/alpaca
+          retention-days: 3
+
+  shard:
+    needs: data
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        # news_momentum is excluded inside the study (no 10-year headline archive).
+        strategy: [gap_and_go, orb, vwap_pullback, ema_crossover, rsi2_reversion,
+                   squeeze_breakout, high_break_trail, ar_forecast]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: bars
+          path: data/alpaca
+      - name: Run ${{ matrix.strategy }} over the window
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: >-
+          uv run trading-lab history --workers 4
+          --start ${{ inputs.start }} --end ${{ needs.data.outputs.end }}
+          --strategies ${{ matrix.strategy }}
+          --trades-out shards/${{ matrix.strategy }}.pkl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.strategy }}
+          path: shards/
+          retention-days: 7
+
+  report:
+    needs: shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: results-commit
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shard-*
+          path: shards
+          merge-multiple: true
+      - name: Merge shards into results/HISTORY.md
+        run: uv run trading-lab history-report shards/*.pkl
+      - name: Commit the report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add results/HISTORY.md
+          git diff --cached --quiet && echo "No report changes." && exit 0
+          git commit -m "history: ten-year study $(date -u +%F)"
+          git pull --rebase
+          git push
