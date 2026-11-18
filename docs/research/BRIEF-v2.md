@@ -28,6 +28,13 @@ present), and `src/trading_lab/market.py` first.
   best set lost money on its own training data.
 - A machine-learning "regime filter" on entry conditions looked strong in one backtest
   window and failed live.
+- Ten-year confirmation (`results/HISTORY.md`, 2016–2026, 196,462 backtest trades): no
+  intraday rule beats the market in any of 11 years, long or short. The losses (about
+  $12–17 per $10k trade) are roughly the size of the modelled costs (5 bps per side plus
+  the hedge), so the entries have about **zero predictive value before costs**. Live paper
+  results run about $10 per trade worse than the backtest (execution lag). Implication for
+  this research: favour lower-turnover signals (daily/weekly horizons) with an economic
+  mechanism, where the edge per trade can plausibly exceed costs.
 - Cboe option-selling benchmarks (put-write, covered calls, iron condors, since 1986):
   no statistically significant alpha beyond their market exposure; weekly put-writing has
   significantly *negative* alpha over the last 10 years.

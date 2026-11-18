@@ -348,6 +348,8 @@ filters (`trading-lab regime`, above) learn from.
       SPY-adjusted, year by year, walk-forward tuned — run on GitHub's runners by the
       manual **History study** workflow (`gh workflow run history-study.yml`), never on
       the laptop; plus the Cboe options-selling study (`results/OPTIONS.md`)
+      — **result: no intraday rule beats the market in any of 11 years** (196k trades,
+      long and short); losses ≈ trading costs, i.e. the entries carry no signal
 - [ ] Decision date 2026-12-21: continue only strategies that beat the market (see `results/REVIEW.md`)
 - [ ] Longer history + true gappers via Alpaca's historical minute data
 - [ ] **Gate:** paper trading is the data-collection lab; nothing touches real money
