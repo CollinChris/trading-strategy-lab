@@ -1,0 +1,86 @@
+name: Event studies (insiders, earnings)
+
+# Manual (Actions tab → "Run workflow", or `gh workflow run event-studies.yml`).
+# Pre-registered studies A and B (docs/research/PREREGISTRATION.md) on SEC EDGAR
+# data. SEC requires a contact in every request's User-Agent, so this needs the
+# repository secret SEC_USER_AGENT, e.g.:
+#   gh secret set SEC_USER_AGENT --body "Your Name you@example.com"
+on:
+  workflow_dispatch:
+    inputs:
+      study:
+        description: "Which study"
+        type: choice
+        options: [both, insiders, earnings]
+        default: both
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SEC contact is configured
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: |
+          if [[ "$SEC_USER_AGENT" != *@* ]]; then
+            echo "::error::Set the SEC_USER_AGENT secret first: gh secret set SEC_USER_AGENT --body 'Your Name you@example.com'"
+            exit 1
+          fi
+
+  bars:
+    needs: check
+    uses: ./.github/workflows/research-bars.yml
+    secrets: inherit
+
+  study:
+    needs: bars
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        study: ${{ fromJSON(inputs.study == 'both' && '["insiders","earnings"]' || format('["{0}"]', inputs.study)) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: panel
+          path: data/research/panel
+      - name: Run the ${{ matrix.study }} study
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: uv run trading-lab research ${{ matrix.study }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ matrix.study }}
+          path: results/*.md
+          retention-days: 7
+
+  commit:
+    needs: study
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: results-commit
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: report-*
+          path: results
+          merge-multiple: true
+      - name: Commit the reports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add results/INSIDERS.md results/EARNINGS.md 2>/dev/null || true
+          git diff --cached --quiet && echo "No report changes." && exit 0
+          git commit -m "research: event studies $(date -u +%F)"
+          git pull --rebase
+          git push

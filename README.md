@@ -296,6 +296,39 @@ Five time-series features join them: `mkt_realized_vol_pct`, `mkt_trend_slope_pc
 `mkt_autocorr_1`, `mkt_atr_pct`, `mkt_range_pos`. This is the dataset the regime
 filters (`trading-lab regime`, above) learn from.
 
+## Research track — slower strategies, pre-registered
+
+The intraday rules carry no signal (ten years, 196k trades), so the lab now tests
+slower ideas with an economic mechanism, chosen from two literature reviews
+([v1](docs/research/2026-11-strategy-research.md), [v2](docs/research/2026-11-strategy-research-v2.md)).
+Every parameter and the pass/fail rule of each study was committed in
+[docs/research/PREREGISTRATION.md](docs/research/PREREGISTRATION.md) **before** any of
+them ran. One primary test decides each; a failure is archived, not re-tuned.
+(Amendment 1, also made before any run: FNSPID's timestamps are 8 hours off and mostly
+date-only, so study C trades the session *after* a headline's date.)
+
+| Study | Signal | Data | Workflow | Report |
+|---|---|---|---|---|
+| A. Insider clusters | ≥2 directors/officers buy within 7 days → long 40 sessions | SEC Form 4 data sets | `event-studies.yml` | `results/INSIDERS.md` |
+| B. Earnings drift | top/bottom-decile day-0 reaction to an 8-K item 2.02 → follow it for 5 sessions | SEC EDGAR submissions | `event-studies.yml` | `results/EARNINGS.md` |
+| C. News sentiment | FinBERT score of a stock's headlines since the last session → long top fifth / short bottom fifth, open → close | FNSPID Benzinga (2016–2023) + Alpaca archive (2026-04-29 on) | `news-study.yml` | `results/NEWS.md` |
+
+All three share one engine (`src/trading_lab/research/`): Alpaca daily bars for every
+US listing, a point-in-time top-1,000 (or 500) liquidity universe, each trade hedged
+with beta × SPY, 5 bp per side plus 1 bp on the hedge, a calendar-time portfolio, and
+bootstrap 95% ranges. Everything heavy runs on GitHub Actions — never the laptop:
+
+```bash
+gh secret set SEC_USER_AGENT --body "Your Name you@example.com"  # SEC requires a contact
+gh workflow run event-studies.yml    # A + B, ~1–2 h
+gh workflow run news-study.yml       # C, FinBERT sharded across parallel jobs
+```
+
+`news-archive.yml` runs daily and appends scored Alpaca headlines — numbers only, no
+headline text — to the `news-archive` branch, building study C's forward sample. A
+study that passes moves to paper trading in a **separate Alpaca paper account**
+(multi-day holds must not mix with the intraday book's flatten-everything rule).
+
 ## Methodology & limitations (read before believing any number)
 
 - **60-day sample, one market regime.** yfinance caps 5-minute history at 60
@@ -350,6 +383,10 @@ filters (`trading-lab regime`, above) learn from.
       the laptop; plus the Cboe options-selling study (`results/OPTIONS.md`)
       — **result: no intraday rule beats the market in any of 11 years** (196k trades,
       long and short); losses ≈ trading costs, i.e. the entries carry no signal
+- [ ] v0.12 — research track: three slower strategies pre-registered
+      ([PREREGISTRATION.md](docs/research/PREREGISTRATION.md)) and built on a shared
+      daily event-study engine — insider clusters, earnings drift, news sentiment;
+      daily scored-news archive. Results pending their first Actions runs.
 - [ ] Decision date 2026-12-21: continue only strategies that beat the market (see `results/REVIEW.md`)
 - [ ] Longer history + true gappers via Alpaca's historical minute data
 - [ ] **Gate:** paper trading is the data-collection lab; nothing touches real money

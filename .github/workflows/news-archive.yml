@@ -1,0 +1,59 @@
+name: News archive
+
+# Daily: fetch Alpaca's new headlines (Benzinga), score them with FinBERT and the
+# Loughran–McDonald dictionary, and append the *numbers* — id, time, symbols, word
+# count, scores — to monthly CSVs on the `news-archive` branch. No headline text is
+# stored (redistribution terms). This builds the forward sample for study C,
+# starting 2026-04-29, where Alpaca's archive actually starts; each run catches up
+# at most 30 days (~700 headlines/hour), so the backlog clears over a week of runs.
+# Timing doesn't matter here, so GitHub's own (sometimes late) scheduler is fine.
+on:
+  schedule:
+    - cron: "40 23 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: news-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --extra news
+      - name: Check out the archive branch (created on the first run)
+        run: |
+          if git ls-remote --exit-code --heads origin news-archive >/dev/null; then
+            git fetch --depth=1 origin news-archive
+            git worktree add -B news-archive archive FETCH_HEAD
+          else
+            git worktree add --orphan -b news-archive archive
+          fi
+      - name: Fetch and score new headlines
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: uv run trading-lab research news-archive --dir archive/news
+      - name: Commit to news-archive (finished months survive a timeout)
+        if: always()
+        working-directory: archive
+        run: |
+          if [ ! -f README.md ]; then
+            printf '%s\n' "# News archive" "" \
+              "Scored Alpaca (Benzinga) headlines for the lab's pre-registered news study" \
+              "(docs/research/PREREGISTRATION.md on main). One row per headline: id, time," \
+              "symbols, word count, FinBERT and Loughran–McDonald scores. No headline text." \
+              "Written daily by .github/workflows/news-archive.yml." > README.md
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add README.md news
+          git diff --cached --quiet && echo "Nothing new." && exit 0
+          git commit -m "news archive: $(date -u +%F)"
+          git push origin news-archive

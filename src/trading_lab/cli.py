@@ -1,4 +1,4 @@
-"""Command-line entry point: `trading-lab backtest|tune|regime|paper|journal`."""
+"""Command-line entry point: `trading-lab backtest|tune|regime|paper|journal|research ...`."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 
 from .config import DEFAULT_SYMBOLS, Config
+from .research import cli as research_cli
 
 
 def main() -> None:
@@ -90,6 +91,7 @@ def main() -> None:
     hr = sub.add_parser("history-report", help="merge history shards into results/HISTORY.md")
     hr.add_argument("parts", nargs="+", help="shard pickles from `history --strategies ...`")
     hr.add_argument("--full-grid", action="store_true")
+    research_cli.add_parser(sub)
 
     args = parser.parse_args()
 
@@ -192,6 +194,9 @@ def main() -> None:
             Path("results/paper_journal.csv"), Path("results/trades.csv"), Path("results/REVIEW.md")
         )
         print(f"Review → {path}")
+
+    elif args.command == "research":
+        research_cli.dispatch(args)
 
 
 if __name__ == "__main__":

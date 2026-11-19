@@ -1,0 +1,28 @@
+name: Research price panel
+
+# Reusable step of the pre-registered studies (docs/research/PREREGISTRATION.md):
+# daily bars for every listed US stock since 2015 from Alpaca (adjusted for returns,
+# unadjusted for the liquidity screen), uploaded as the `panel` artifact for the
+# calling workflow's later jobs. Fetched fresh each run — cached adjusted prices
+# would go stale whenever a stock splits.
+on:
+  workflow_call:
+
+jobs:
+  bars:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - name: Download daily bars (all US listings, 2015 → yesterday)
+        env:
+          ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+        run: uv run trading-lab research bars
+      - uses: actions/upload-artifact@v4
+        with:
+          name: panel
+          path: data/research/panel
+          retention-days: 3

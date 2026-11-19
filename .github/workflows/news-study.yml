@@ -1,0 +1,117 @@
+name: News sentiment study
+
+# Manual (Actions tab → "Run workflow", or `gh workflow run news-study.yml`).
+# Pre-registered study C (docs/research/PREREGISTRATION.md): FNSPID's Benzinga
+# headlines 2016+ scored by FinBERT on CPU, split across parallel jobs sized by the
+# prep step (each well inside the 6-hour job limit). FNSPID is CC BY-NC 4.0: used
+# non-commercially here, and neither it nor its headline text is ever committed.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bars:
+    uses: ./.github/workflows/research-bars.yml
+    secrets: inherit
+
+  prep:
+    needs: bars
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    outputs:
+      shards: ${{ steps.prep.outputs.shards }}
+      n_shards: ${{ steps.prep.outputs.n_shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: panel
+          path: data/research/panel
+      - name: Download FNSPID external news (5.7 GB)
+        run: >-
+          curl -fL --retry 5 --retry-delay 30 -o "$RUNNER_TEMP/fnspid.csv"
+          https://huggingface.co/datasets/Zihan1004/FNSPID/resolve/main/Stock_news/All_external.csv
+      - name: Filter headlines and plan scoring shards
+        id: prep
+        run: uv run trading-lab research news-prep "$RUNNER_TEMP/fnspid.csv"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: news-prep
+          path: data/research/news
+          retention-days: 7
+
+  score:
+    needs: prep
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.prep.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --extra news
+      - uses: actions/download-artifact@v4
+        with:
+          name: news-prep
+          path: data/research/news
+      - name: FinBERT + Loughran–McDonald, shard ${{ matrix.shard }}
+        run: >-
+          uv run trading-lab research news-score
+          --shard ${{ matrix.shard }} --of ${{ needs.prep.outputs.n_shards }}
+          --out scores/${{ matrix.shard }}.pkl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scores-${{ matrix.shard }}
+          path: scores/
+          retention-days: 30
+
+  study:
+    needs: [prep, score]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: results-commit
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: panel
+          path: data/research/panel
+      - uses: actions/download-artifact@v4
+        with:
+          name: news-prep
+          path: data/research/news
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: scores-*
+          path: scores
+          merge-multiple: true
+      - name: Forward sample from the news-archive branch (if it exists yet)
+        run: |
+          if git ls-remote --exit-code --heads origin news-archive >/dev/null; then
+            git fetch --depth=1 origin news-archive
+            git worktree add archive FETCH_HEAD
+          fi
+      - name: Score the book → results/NEWS.md
+        run: |
+          args=()
+          [ -d archive/news ] && args=(--archive archive/news)
+          uv run trading-lab research news-study scores/*.pkl "${args[@]}"
+      - name: Commit the report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add results/NEWS.md
+          git diff --cached --quiet && echo "No report changes." && exit 0
+          git commit -m "research: news sentiment study $(date -u +%F)"
+          git pull --rebase
+          git push
