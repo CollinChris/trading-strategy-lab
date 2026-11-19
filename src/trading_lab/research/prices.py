@@ -46,11 +46,23 @@ def _headers() -> dict[str, str]:
 _last_call = 0.0
 
 
+def _rate_limit_wait(exc: urllib.error.HTTPError, attempt: int) -> float:
+    """Seconds to wait after a 429: until Alpaca's window resets if it says when."""
+    reset = exc.headers.get("X-RateLimit-Reset") if exc.headers else None
+    if reset and reset.isdigit():
+        return min(65.0, max(1.0, int(reset) - time.time() + 1))
+    return min(60.0, 5.0 * (attempt + 1))
+
+
 def get_json(url: str, params: dict, headers: dict, tries: int = 6) -> dict | list:
-    """GET with a global request pace and bounded retries (429s back off, not hammer)."""
+    """GET with a global request pace and bounded retries. Rate limits (429) are
+    shared across every job using the account — e.g. a price download and the news
+    archive at once — so 429s wait for the window to reset, up to 40 times, while
+    server errors and network failures get `tries` attempts."""
     global _last_call
     query = url + ("?" + urllib.parse.urlencode(params) if params else "")
-    for attempt in range(tries):
+    failures = limited = 0
+    while True:
         wait = _last_call + MIN_INTERVAL - time.monotonic()
         if wait > 0:
             time.sleep(wait)
@@ -60,13 +72,17 @@ def get_json(url: str, params: dict, headers: dict, tries: int = 6) -> dict | li
             with urllib.request.urlopen(req, timeout=60) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as exc:
-            if exc.code not in (429, 500, 502, 503, 504) or attempt == tries - 1:
+            if exc.code == 429 and limited < 40:
+                limited += 1
+                time.sleep(_rate_limit_wait(exc, limited))
+                continue
+            if exc.code not in (500, 502, 503, 504) or failures == tries - 1:
                 raise
         except (urllib.error.URLError, TimeoutError, ConnectionError):
-            if attempt == tries - 1:
+            if failures == tries - 1:
                 raise
-        time.sleep(min(60, 5 * 2**attempt))
-    raise RuntimeError("unreachable")
+        failures += 1
+        time.sleep(min(60, 5 * 2**failures))
 
 
 TICKER = re.compile(r"^[A-Z]{1,5}(\.[A-Z]{1,2})?$")  # plain tickers + share classes (BRK.B)

@@ -468,3 +468,33 @@ def test_fnspid_prep_benzinga_only_shifted_and_filtered(tmp_path):
     assert (heads["date"] == pd.Timestamp("2020-06-05")).all()
     assert stats["schedule_check"]["Mid-Day Session"]["median_et"] == pytest.approx(12.75)
     assert len(pd.read_pickle(tmp_path / "out" / "titles.pkl")) == 2
+
+
+def test_get_json_waits_out_rate_limits(monkeypatch):
+    import email.message
+    import io
+    import urllib.error
+
+    from trading_lab.research import prices
+
+    calls = {"n": 0}
+
+    class Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout):
+        calls["n"] += 1
+        if calls["n"] <= 8:  # more 429s than the server-error retry budget
+            raise urllib.error.HTTPError(
+                req.full_url, 429, "slow down", email.message.Message(), None
+            )
+        return Resp(b'{"ok": true}')
+
+    monkeypatch.setattr(prices.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(prices.time, "sleep", lambda s: None)
+    assert prices.get_json("https://x", {}, {}) == {"ok": True}
+    assert calls["n"] == 9
