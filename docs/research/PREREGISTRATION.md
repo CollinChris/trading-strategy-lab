@@ -145,6 +145,16 @@ Section C's historical test therefore changes as follows; everything else in it 
   same-morning effect. A FAIL here does not test the same-morning effect — the Alpaca forward
   sample keeps the original timing for that.
 
+## Corrections (bugs fixed after a run — rules unchanged)
+
+- **2026-11-19, study B.** The first run (results commit 4393248) treated EDGAR's acceptance
+  timestamps as US Eastern; they are UTC. Its own data check showed the symptom (46% of
+  earnings 8-Ks "during the session", 1% before the open), and pre-market announcements got a
+  day 0 one session late — not the rule above. That run is void (it read FAIL, Sharpe −0.36).
+  The code now converts UTC → Eastern and refuses to run if over 20% land in the session.
+- **Sample start, all studies:** Alpaca's daily history begins in January 2016, so the
+  250-session screens are only satisfied from early 2017; the samples start then.
+
 ## Power, stated in advance
 
 With about 8–10 years of daily data, a true annualised Sharpe of roughly 0.65–0.75 is the smallest

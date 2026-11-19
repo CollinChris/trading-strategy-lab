@@ -213,7 +213,9 @@ in advance: [PREREGISTRATION.md](../docs/research/PREREGISTRATION.md), section A
 ## What was tested
 
 - {len(purchases):,} qualifying director/officer purchases → {len(events):,} cluster events
-  → {len(done):,} trades in the top-{TOP_N} liquidity universe at entry
+  ({events["symbol"].isin(panel.close.columns).sum():,} in stocks with Alpaca prices; insider
+  buying is mostly a small-cap phenomenon) → {len(done):,} trades in the top-{TOP_N}
+  liquidity universe at entry
   ({done["symbol"].nunique():,} stocks, {sessions[span[0]].date()} → {sessions[span[1]].date()}).
 - Long at the next open after the filing date, out at the close of the {HOLD}th session;
   every trade hedged with beta × SPY; 5 bp per side on the stock and 1 bp on the hedge.
@@ -245,7 +247,9 @@ By cluster size:
 {engine.breakdown(done, daily, done["cluster"], sessions, span, "cluster")}
 
 Accepted limitations (stated in advance): the Rule 10b5-1 flag exists only from 2023;
-SEC's ticker map lists current companies, so some delisted issuers can't be priced.
+SEC's ticker map lists current companies, so some delisted issuers can't be priced. Alpaca's
+price history starts in January 2016 and the screens need 250 sessions of it, so trades start
+in 2017.
 """
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text)

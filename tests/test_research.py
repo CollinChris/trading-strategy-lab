@@ -223,14 +223,18 @@ def test_day_zero_timing():
     accepted = earnings.parse_accepted(
         pd.Series(
             [
-                "2024-04-30T07:00:00.000Z",  # Tue before the open → Tue
-                "2024-04-30T09:30:00.000Z",  # Tue at the open → Wed
-                "2024-04-30T16:05:12.000Z",  # Tue after the close → Wed
-                "2024-05-04T10:00:00.000Z",  # Saturday → Mon
+                "2024-04-30T11:00:00.000Z",  # Tue 07:00 EDT, before the open → Tue
+                "2024-04-30T13:30:00.000Z",  # Tue 09:30 EDT, at the open → Wed
+                "2024-04-30T20:05:12.000Z",  # Tue 16:05 EDT, after the close → Wed
+                "2024-05-04T14:00:00.000Z",  # Saturday → Mon
             ]
         )
     )
-    assert accepted.iloc[2] == pd.Timestamp("2024-04-30 16:05:12")  # wall clock kept
+    assert accepted.iloc[2] == pd.Timestamp("2024-04-30 16:05:12")  # UTC → Eastern
+    assert earnings.parse_accepted(pd.Series(["2024-01-30T12:00:00.000Z"])).iloc[0] == (
+        pd.Timestamp("2024-01-30 07:00")  # EST in winter
+    )
+    assert earnings.timing_profile(accepted) == pytest.approx((0.25, 0.5, 0.25))  # 09:30 + Sat 10:00
     got = sessions[earnings.day_zero(accepted, sessions)].strftime("%a %d").tolist()
     assert got == ["Tue 30", "Wed 01", "Wed 01", "Mon 06"]
 

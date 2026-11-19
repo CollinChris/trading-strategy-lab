@@ -51,10 +51,22 @@ def fetch_announcements(client: SecClient, ciks: dict[int, str], since: str = "2
 
 
 def parse_accepted(raw: pd.Series) -> pd.Series:
-    """EDGAR acceptance stamps are US Eastern wall-clock time even though the
-    submissions API writes them with a trailing 'Z'; the report's time-of-day
-    profile is the check (releases cluster before the open and after the close)."""
-    return pd.to_datetime(raw.astype(str).str[:19], format="%Y-%m-%dT%H:%M:%S", errors="coerce")
+    """EDGAR acceptance stamps (submissions API) are UTC → naive US Eastern wall clock.
+
+    The first run read them as Eastern already and put 46% of earnings 8-Ks "during the
+    session" and 1% before the open — impossible, since about half of US companies
+    report pre-market. `timing_profile` is the guard against that ever recurring."""
+    utc = pd.to_datetime(
+        raw.astype(str).str[:19], format="%Y-%m-%dT%H:%M:%S", errors="coerce"
+    ).dt.tz_localize("UTC")
+    return utc.dt.tz_convert("America/New_York").dt.tz_localize(None)
+
+
+def timing_profile(accepted_et: pd.Series) -> tuple[float, float, float]:
+    """Shares accepted before 09:30, during the session, and at/after 16:00 ET."""
+    minutes = accepted_et.dt.hour * 60 + accepted_et.dt.minute
+    pre, post = float((minutes < 570).mean()), float((minutes >= 960).mean())
+    return pre, 1 - pre - post, post
 
 
 def day_zero(accepted_et: pd.Series, sessions: pd.DatetimeIndex) -> np.ndarray:
@@ -138,6 +150,13 @@ def run(panel_dir: Path, out: Path = Path("results/EARNINGS.md")) -> Path:
     events["accepted"] = parse_accepted(events["accepted_raw"])
     events = events.dropna(subset=["accepted"])
     events = events[events["accepted"] >= pd.Timestamp("2015-12-01")]
+    pre, during, post = timing_profile(events["accepted"])
+    print(f"earnings: accepted {pre:.0%} pre-open, {during:.0%} in session, {post:.0%} after")
+    if during > 0.2:
+        raise SystemExit(
+            f"{during:.0%} of earnings 8-Ks accepted during the session — the acceptance "
+            "times look mis-zoned; refusing to run on them."
+        )
     syms = sorted(set(events["symbol"]) & set(panel.close.columns) | {"SPY"})
     beta = engine.rolling_beta(panel.close[syms], panel.close["SPY"])
     ev, trades = build_trades(events, panel, rank, beta)
@@ -159,8 +178,7 @@ def write_report(events, ev, results, daily, panel: Panel, out: Path) -> Path:
     done["tercile"] = pd.cut(
         done["rank"], [0, 333, 666, TOP_N], labels=["1–333", "334–666", "667–1000"]
     )
-    minutes = events["accepted"].dt.hour * 60 + events["accepted"].dt.minute
-    pre, post = (minutes < 570).mean(), (minutes >= 960).mean()
+    pre, during, post = timing_profile(events["accepted"])
     text = f"""# Earnings-reaction drift (pre-registered study B)
 
 Generated {market_today()} from SEC 8-K item 2.02 filings and Alpaca daily bars. Rules
@@ -204,9 +222,14 @@ By year (portfolio):
 
 {engine.by_year(port)}
 
-Data check — acceptance times (read as US Eastern): {pre:.0%} before 09:30, {post:.0%} at or
-after 16:00, {1 - pre - post:.0%} during the session. Most US companies release before the
-open or after the close, so a large "during the session" share would mean a time-zone error.
+Data check — acceptance times (UTC stamps converted to US Eastern): {pre:.0%} before 09:30,
+{post:.0%} at or after 16:00, {during:.0%} during the session. Most US companies release before
+the open or after the close; the study refuses to run if more than 20% fall in the session.
+
+Run history: the first run (commit 4393248) read these stamps as Eastern without
+converting, which put every pre-market announcement's day 0 one session late; its own data
+check showed 46% "during the session". That run is void (it read FAIL, Sharpe −0.36); this
+report is the corrected run, rules unchanged. See PREREGISTRATION.md, "Corrections".
 
 Accepted limitation (stated in advance): SEC's ticker map lists current companies only, so
 announcements by since-delisted firms are missing.
