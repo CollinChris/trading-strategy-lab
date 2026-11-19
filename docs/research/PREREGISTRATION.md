@@ -108,6 +108,43 @@ merger), the position exits at its last available close.
   close); long and short legs; by year; the Alpaca-era forward sample (archived as derived scores
   only — no headline text is stored).
 
+## Amendment 1 — 2026-11-19, before any study has run
+
+Checking FNSPID's file before the first run (timestamps, titles and URLs only — no prices or
+returns were looked at; six 25 MB samples spread across `All_external.csv`, ~400k rows) found
+section C unworkable as written:
+
+1. **The "UTC" stamps are 8 hours behind UTC**, in both daylight-saving seasons. Benzinga's
+   fixed-schedule headlines only land at their known times after adding 8 hours — e.g.
+   "Mid-Day Market Update" is stamped 08h in summer and 09h in winter (12:00 ET after the
+   shift); "Pre-Market Session" 03–04h / 04–05h (07–08 ET); "After-Hours Session" 13h / 14h
+   (17 ET). For 2016+ the median error after the shift is under 0.5 h for every pattern.
+   Read as UTC, daytime headlines would have fallen into the pre-open window — look-ahead.
+2. **~97% of 2016–2019 Benzinga rows have a date but no time** (stamped 00:00:00). The
+   pre-open window could use only the few percent that are timed, and not a random few.
+3. **The file mixes publishers**: Benzinga, Reuters and lenta.ru (Russian-language).
+
+Section C's historical test therefore changes as follows; everything else in it stands
+(universe, n ≥ 10, k = ⌊n/5⌋, costs, hedge, the PASS rule).
+
+- **Headlines:** Benzinga only (URL on benzinga.com), as the section always intended.
+- **Timing:** a headline's date is the calendar date of its stamp. Headlines dated D are traded at
+  the first session after D, open → close; a stock's sentiment for a session is the mean FinBERT
+  score of its headlines dated after the previous session's date and before the session's date
+  (Friday–Sunday for a Monday). This has no look-ahead under any reading of the stamps: even
+  with the 8-hour shift, a headline dated D was out before 04:00 ET on the next day.
+- **Round-up filter:** the same title tagged to 3 or more symbols on the same date (as before).
+  The exact-midnight rule is withdrawn — those rows are now the main sample.
+- **Descriptive variants** (replacing the list above): Loughran–McDonald with the same rule; the
+  original 16:00 → 09:25 window on FNSPID's timed rows only, after adding 8 hours; long and short
+  legs; by year; the Alpaca-era forward sample under both the date rule and the original window.
+  The overnight-hold variant is dropped (entering at the close of a headline's own date could use
+  news published after that close).
+- **Expectation, stated now:** trading the session after the news, much of it is already in the
+  price; this tests slow diffusion, which the literature finds weaker in large caps than the
+  same-morning effect. A FAIL here does not test the same-morning effect — the Alpaca forward
+  sample keeps the original timing for that.
+
 ## Power, stated in advance
 
 With about 8–10 years of daily data, a true annualised Sharpe of roughly 0.65–0.75 is the smallest
