@@ -46,7 +46,7 @@ def add_parser(sub) -> None:
 
     na = cmd.add_parser("news-archive", help="append scored Alpaca headlines (no text kept)")
     na.add_argument("--dir", required=True)
-    na.add_argument("--max-days", type=int, default=30, help="catch-up limit per run")
+    na.add_argument("--max-days", type=int, default=90, help="catch-up limit per run")
 
 
 def dispatch(args: argparse.Namespace) -> None:

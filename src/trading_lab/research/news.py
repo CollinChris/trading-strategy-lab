@@ -41,7 +41,7 @@ TOP_N = 500
 MIN_WORDS = 4
 ROUNDUP_SYMBOLS = 3
 MIN_STOCKS = 10
-SHARD_TITLES = 600_000  # unique titles per scoring job (~2 h at a cautious 80/s)
+SHARD_TITLES = 250_000  # unique titles per scoring job: ~1.7 h at the ~42/s FinBERT does on Actions
 WINDOW = ("16:00", "09:25")  # original pre-open window, ET (descriptive since Amendment 1)
 FNSPID_SHIFT = pd.Timedelta(hours=8)  # FNSPID "UTC" stamps run 8 h behind UTC
 # Benzinga's fixed-schedule headlines and their usual ET hour: the timing check.
@@ -274,10 +274,10 @@ def _month_starts(start: dt.datetime, end: dt.datetime):
         m = nxt
 
 
-def archive(archive_dir: Path, since: dt.date = ARCHIVE_START, max_days: int = 30) -> int:
+def archive(archive_dir: Path, since: dt.date = ARCHIVE_START, max_days: int = 90) -> int:
     """Append Alpaca headlines since the last archived one, scored, as monthly CSVs.
-    At most `max_days` per run (~700 headlines an hour: a full backfill would outrun
-    a 6-hour job), so a backlog catches up over consecutive daily runs."""
+    At most `max_days` per run (~2k headlines a day, scored at ~42/s on Actions), so
+    a backlog catches up over consecutive runs inside the 6-hour job limit."""
     archive_dir.mkdir(parents=True, exist_ok=True)
     files = sorted(archive_dir.glob("*.csv"))
     start = dt.datetime.combine(since, dt.time(), tzinfo=ET).astimezone(dt.UTC)

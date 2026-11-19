@@ -5,7 +5,7 @@ name: News archive
 # count, scores — to monthly CSVs on the `news-archive` branch. No headline text is
 # stored (redistribution terms). This builds the forward sample for study C,
 # starting 2026-04-29, where Alpaca's archive actually starts; each run catches up
-# at most 30 days (~700 headlines/hour), so the backlog clears over a week of runs.
+# at most 90 days (~2k headlines/day, FinBERT ~42/s here) to stay inside 6 hours.
 # Timing doesn't matter here, so GitHub's own (sometimes late) scheduler is fine.
 on:
   schedule:
