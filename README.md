@@ -307,11 +307,21 @@ them ran. One primary test decides each; a failure is archived, not re-tuned.
 (Amendment 1, also made before any run: FNSPID's timestamps are 8 hours off and mostly
 date-only, so study C trades the session *after* a headline's date.)
 
-| Study | Signal | Data | Workflow | Report |
+| Study | Signal | Sample | Result (net of costs, vs the market) | Report |
 |---|---|---|---|---|
-| A. Insider clusters | ≥2 directors/officers buy within 7 days → long 40 sessions | SEC Form 4 data sets | `event-studies.yml` | `results/INSIDERS.md` |
-| B. Earnings drift | top/bottom-decile day-0 reaction to an 8-K item 2.02 → follow it for 5 sessions | SEC EDGAR submissions | `event-studies.yml` | `results/EARNINGS.md` |
-| C. News sentiment | FinBERT score of a stock's headlines since the last session → long top fifth / short bottom fifth, open → close | FNSPID Benzinga (2016–2023) + Alpaca archive (2026-04-29 on) | `news-study.yml` | `results/NEWS.md` |
+| A. Insider clusters | ≥2 directors/officers buy within 7 days → long 40 sessions | 1,002 trades, 2017–2026 | **FAIL** — −0.36%/month (95% range −1.13% to +0.44%), IR −0.27 | [INSIDERS.md](results/INSIDERS.md) |
+| B. Earnings drift | top/bottom-decile day-0 reaction to an 8-K item 2.02 → follow it for 5 sessions | 5,766 trades, 2017–2026 | **FAIL** — −8.7 bp/day (−14.5 to −3.1), Sharpe −0.99 | [EARNINGS.md](results/EARNINGS.md) |
+| C. News sentiment | FinBERT score of a stock's headlines since the last session → long top fifth / short bottom fifth, open → close | 19,218 trades, 2017 – mid-2020 (FNSPID's Benzinga coverage ends 2020-06) | **FAIL** — −9.2 bp/day (−11.7 to −6.5), Sharpe −3.7 | [NEWS.md](results/NEWS.md) |
+
+**All three fail, and none is close.** In the liquid stocks a retail account can trade, the
+published effects either reversed (earnings reactions faded rather than drifted) or were smaller
+than the ~12 bp a round trip costs (news: about +3 bp per trade before costs). That matches the
+replication literature in the research reports: these anomalies live mostly in small, costly
+stocks and have decayed since publication. Two bugs were caught by the studies' built-in data
+checks and are recorded in [PREREGISTRATION.md](docs/research/PREREGISTRATION.md) — FNSPID's
+timestamps (fixed before any run) and EDGAR's UTC acceptance times (study B's first run voided
+and rerun, rules unchanged). Samples start in 2017 because Alpaca's history begins in 2016 and
+the screens need a year of it.
 
 All three share one engine (`src/trading_lab/research/`): Alpaca daily bars for every
 US listing, a point-in-time top-1,000 (or 500) liquidity universe, each trade hedged
@@ -324,10 +334,11 @@ gh workflow run event-studies.yml    # A + B, ~1–2 h
 gh workflow run news-study.yml       # C, FinBERT sharded across parallel jobs
 ```
 
-`news-archive.yml` runs daily and appends scored Alpaca headlines — numbers only, no
-headline text — to the `news-archive` branch, building study C's forward sample. A
-study that passes moves to paper trading in a **separate Alpaca paper account**
-(multi-day holds must not mix with the intraday book's flatten-everything rule).
+Each workflow re-runs the same fixed rules on fresh data (e.g. `gh workflow run
+event-studies.yml`); `SEC_USER_AGENT` must be set for A and B. `news-archive.yml` appends
+scored Alpaca headlines daily — numbers only, no headline text — to the `news-archive`
+branch. A study that passes would move to paper trading in a **separate Alpaca paper
+account** (multi-day holds must not mix with the intraday book's flatten-everything rule).
 
 ## Methodology & limitations (read before believing any number)
 
@@ -383,10 +394,10 @@ study that passes moves to paper trading in a **separate Alpaca paper account**
       the laptop; plus the Cboe options-selling study (`results/OPTIONS.md`)
       — **result: no intraday rule beats the market in any of 11 years** (196k trades,
       long and short); losses ≈ trading costs, i.e. the entries carry no signal
-- [ ] v0.12 — research track: three slower strategies pre-registered
-      ([PREREGISTRATION.md](docs/research/PREREGISTRATION.md)) and built on a shared
-      daily event-study engine — insider clusters, earnings drift, news sentiment;
-      daily scored-news archive. Results pending their first Actions runs.
+- [x] v0.12 — research track: three slower strategies pre-registered
+      ([PREREGISTRATION.md](docs/research/PREREGISTRATION.md)) and run on a shared daily
+      event-study engine on GitHub Actions — insider clusters, earnings drift, news
+      sentiment; daily scored-news archive — **result: all three fail net of costs**
 - [ ] Decision date 2026-12-21: continue only strategies that beat the market (see `results/REVIEW.md`)
 - [ ] Longer history + true gappers via Alpaca's historical minute data
 - [ ] **Gate:** paper trading is the data-collection lab; nothing touches real money
